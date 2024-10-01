@@ -12,7 +12,6 @@ import {RecoverERC20} from "../helpers/RecoverERC20.sol";
 import {IChefIncentivesController} from "../../interfaces/radiant/IChefIncentivesController.sol";
 import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
 import {IMultiFeeDistribution, IFeeDistribution} from "../../interfaces/radiant/IMultiFeeDistribution.sol";
-import {IMintableToken} from "../../interfaces/IMintableToken.sol";
 import {
     LockedBalance,
     Balances,
@@ -35,13 +34,13 @@ contract MultiFeeDistribution is
     UUPSUpgradeable
 {
     using SafeERC20 for IERC20;
-    using SafeERC20 for IMintableToken;
 
     /// Constants
     uint256 public constant PERCENT_DIVISOR = 10000; // 100%
     uint256 public constant MAX_SLIPPAGE = 9000; // 10% (used for compounding)
     uint256 public constant RATIO_DIVISOR = 10000;
     uint256 public constant DEFAULT_LOCK_INDEX = 1; // Default lock index
+    uint256 private constant _RPS_PRECISION = 1e12; // Precision for reward per second
     uint256 private constant _QUART = 25000; //  25%
     uint256 private constant _HALF = 65000; //  65%
     uint256 private constant _WHOLE = 100000; // 100%
@@ -153,9 +152,9 @@ contract MultiFeeDistribution is
     /**
      * @notice Return emission token.
      */
-    function emissionToken() external view returns (IMintableToken) {
+    function emissionToken() external view returns (address) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        return IMintableToken($.emissionToken);
+        return $.emissionToken;
     }
 
     /**
@@ -230,7 +229,7 @@ contract MultiFeeDistribution is
      */
     function getRewardForDuration(address _rewardToken) external view returns (uint256) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        return ($.rewardData[_rewardToken].rewardPerSecond * $.rewardDuration) / 1e12;
+        return ($.rewardData[_rewardToken].rewardPerSecond * $.rewardDuration) / _RPS_PRECISION;
     }
 
     /**
@@ -420,7 +419,7 @@ contract MultiFeeDistribution is
                 rewardsData[i].token,
                 $.userBalances[_account].lockedWithMultiplier,
                 MFDLogic.rewardPerToken($, rewardsData[i].token)
-            ) / 1e12;
+            ) / _RPS_PRECISION;
             unchecked {
                 i++;
             }
@@ -460,10 +459,10 @@ contract MultiFeeDistribution is
      * @notice Claim all pending staking rewards.
      * @param _rewardTokens array of reward tokens
      */
-    function getReward(address[] memory _rewardTokens) public {
+    function getReward(address[] memory _rewardTokens) public whenNotPaused {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
         MFDLogic.updateReward($, msg.sender);
-        _getReward(msg.sender, _rewardTokens);
+        MFDLogic.getReward($, msg.sender, _rewardTokens);
         IPriceProvider($.priceProvider).update();
     }
 
@@ -738,46 +737,14 @@ contract MultiFeeDistribution is
 
     /**
      * @notice Add to earnings
-     * @dev Minted tokens receive rewards normally but incur a 50% penalty when
+     * @dev Emission tokens receive rewards normally but incur a 50% penalty when
      *  withdrawn before vestDuration has passed.
      * @param _user vesting owner.
      * @param _amount to vest.
      * @param _withPenalty does this bear penalty?
      */
     function vestTokens(address _user, uint256 _amount, bool _withPenalty) external whenNotPaused {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (!$.emissionDistributors[msg.sender]) revert InsufficientPermission();
-        if (_amount == 0) return;
-
-        if (_user == address(this)) {
-            // minting to this contract adds the new tokens as incentives for lockers
-            _notifyReward(address($.emissionToken), _amount);
-            return;
-        }
-
-        Balances storage bal = $.userBalances[_user];
-        bal.total = bal.total + _amount;
-        if (_withPenalty) {
-            bal.earned = bal.earned + _amount;
-            LockedBalance[] storage earnings = $.userEarnings[_user];
-
-            uint256 currentDay = block.timestamp / 1 days;
-            uint256 lastIndex = earnings.length > 0 ? earnings.length - 1 : 0;
-            uint256 vestingDurationDays = $.vestDuration / 1 days;
-
-            // We check if an entry for the current day already exists. If yes, add new amount to that entry
-            if (earnings.length > 0 && (earnings[lastIndex].unlockTime / 1 days) == currentDay + vestingDurationDays) {
-                earnings[lastIndex].amount = earnings[lastIndex].amount + _amount;
-            } else {
-                // If there is no entry for the current day, create a new one
-                uint256 unlockTime = block.timestamp + $.vestDuration;
-                earnings.push(
-                    LockedBalance({amount: _amount, unlockTime: unlockTime, multiplier: 1, duration: $.vestDuration})
-                );
-            }
-        } else {
-            bal.unlocked = bal.unlocked + _amount;
-        }
+        MFDLogic.vestTokens(_getMultiFeeDistributionStorage(), _user, _amount, _withPenalty);
     }
 
     /**
@@ -890,18 +857,18 @@ contract MultiFeeDistribution is
      * @param _claimRewards true to claim rewards when exit
      */
     function exit(bool _claimRewards) external {
-        address onBe_HALFOf = msg.sender;
-        (uint256 amount, uint256 penaltyAmount, uint256 burnAmount) = withdrawableBalance(onBe_HALFOf);
+        address onBelfOf = msg.sender;
+        (uint256 amount, uint256 penaltyAmount, uint256 burnAmount) = withdrawableBalance(onBelfOf);
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
 
-        delete $.userEarnings[onBe_HALFOf];
+        delete $.userEarnings[onBelfOf];
 
-        Balances storage bal = $.userBalances[onBe_HALFOf];
+        Balances storage bal = $.userBalances[onBelfOf];
         bal.total = bal.total - bal.unlocked - bal.earned;
         bal.unlocked = 0;
         bal.earned = 0;
 
-        _withdrawTokens(onBe_HALFOf, amount, penaltyAmount, burnAmount, _claimRewards);
+        _withdrawTokens(onBelfOf, amount, penaltyAmount, burnAmount, _claimRewards);
     }
 
     /**
@@ -979,8 +946,8 @@ contract MultiFeeDistribution is
         for (uint256 i; i < length;) {
             address token = $.rewardTokens[i];
             if (token != $.emissionToken) {
-                _notifyUnseenReward(token);
-                uint256 reward = $.rewards[_onBehalf][token] / 1e12;
+                MFDLogic.notifyUnseenReward($, token);
+                uint256 reward = $.rewards[_onBehalf][token] / _RPS_PRECISION;
                 if (reward > 0) {
                     $.rewards[_onBehalf][token] = 0;
                     $.rewardData[token].balance = $.rewardData[token].balance - reward;
@@ -1025,94 +992,6 @@ contract MultiFeeDistribution is
     /// Internal functions
 
     /**
-     * @notice Add new reward.
-     * @dev If prev reward period is not done, then it resets `rewardPerSecond` and restarts period
-     * @param _rewardToken address
-     * @param _reward amount
-     */
-    function _notifyReward(address _rewardToken, uint256 _reward) internal {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        address _operationExpenseReceiver = $.operationExpenseReceiver;
-        uint256 _operationExpenseRatio = $.operationExpenseRatio;
-        if (_operationExpenseReceiver != address(0) && _operationExpenseRatio != 0) {
-            uint256 opExAmount = (_reward * _operationExpenseRatio) / RATIO_DIVISOR;
-            if (opExAmount != 0) {
-                IERC20(_rewardToken).safeTransfer(_operationExpenseReceiver, opExAmount);
-                _reward -= opExAmount;
-            }
-        }
-
-        Reward storage r = $.rewardData[_rewardToken];
-        if (block.timestamp >= r.periodFinish) {
-            r.rewardPerSecond = (_reward * 1e12) / $.rewardDuration;
-        } else {
-            uint256 remaining = r.periodFinish - block.timestamp;
-            uint256 leftover = (remaining * r.rewardPerSecond) / 1e12;
-            r.rewardPerSecond = ((_reward + leftover) * 1e12) / $.rewardDuration;
-        }
-
-        r.lastUpdateTime = block.timestamp;
-        r.periodFinish = block.timestamp + $.rewardDuration;
-        r.balance = r.balance + _reward;
-
-        emit RevenueEarned(_rewardToken, _reward);
-        uint256 lpUsdValue = IPriceProvider($.priceProvider).getRewardTokenPrice(_rewardToken, _reward);
-        emit NewTransferAdded(_rewardToken, lpUsdValue);
-    }
-
-    /**
-     * @notice Notify unseen rewards.
-     * @dev for rewards other than RDNT token, every 24 hours we check if new
-     *  rewards were sent to the contract or accrued via aToken interest.
-     * @param token address
-     */
-    function _notifyUnseenReward(address token) internal {
-        if (token == address(0)) revert AddressZero();
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (token == $.emissionToken) {
-            return;
-        }
-        Reward storage r = $.rewardData[token];
-        uint256 periodFinish = r.periodFinish;
-        if (periodFinish == 0) revert InvalidPeriod();
-        if (periodFinish < block.timestamp + $.rewardDuration - $.rewardsLookback) {
-            uint256 unseen = IERC20(token).balanceOf(address(this)) - r.balance;
-            if (unseen > 0) {
-                _notifyReward(token, unseen);
-            }
-        }
-    }
-
-    /**
-     * @notice User gets reward
-     * @param _user address
-     * @param _rewardTokens array of reward tokens
-     */
-    function _getReward(address _user, address[] memory _rewardTokens) internal whenNotPaused {
-        uint256 length = _rewardTokens.length;
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        IChefIncentivesController chefIncentivesController = IChefIncentivesController($.incentivesController);
-        chefIncentivesController.setEligibilityExempt(_user, true);
-        for (uint256 i; i < length;) {
-            address token = _rewardTokens[i];
-            _notifyUnseenReward(token);
-            uint256 reward = $.rewards[_user][token] / 1e12;
-            if (reward > 0) {
-                $.rewards[_user][token] = 0;
-                $.rewardData[token].balance = $.rewardData[token].balance - reward;
-
-                IERC20(token).safeTransfer(_user, reward);
-                emit RewardPaid(_user, token, reward);
-            }
-            unchecked {
-                i++;
-            }
-        }
-        chefIncentivesController.setEligibilityExempt(_user, false);
-        chefIncentivesController.afterLockUpdate(_user);
-    }
-
-    /**
      * @notice Withdraw tokens from MFD
      * @param _onBehalf address to withdraw
      * @param _amount of withdraw
@@ -1139,7 +1018,7 @@ contract MultiFeeDistribution is
         }
 
         if (_claimRewards) {
-            _getReward(_onBehalf, $.rewardTokens);
+            MFDLogic.getReward($, _onBehalf, $.rewardTokens);
             $.lastClaimTime[_onBehalf] = block.timestamp;
         }
 

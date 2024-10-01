@@ -16,6 +16,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         uint256 currentEpoch;
         uint32 defaultRps;
         uint32 defaultEpochDuration;
+        bytes32[] activeDefiApps;
         mapping(uint256 => EpochParams) epochs;
     }
 
@@ -65,6 +66,8 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         $.defaultEpochDuration = _epochDuration;
         emit SetDefaultEpochDuration(_getNextEpoch($), _epochDuration);
     }
+
+    /// Core functions
 
     /// Internal functions
     function _getNextEpoch(DefiAppHomeCenterStorage storage $) internal view returns (uint256) {

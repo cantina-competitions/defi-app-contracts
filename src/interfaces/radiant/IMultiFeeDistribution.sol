@@ -10,7 +10,7 @@ interface IMultiFeeDistribution is IFeeDistribution {
 
     function stake(uint256 _amount, address _onBehalfOf, uint256 _typeIndex) external;
 
-    function emissionToken() external view returns (IMintableToken);
+    function emissionToken() external view returns (address);
 
     function getPriceProvider() external view returns (address);
 
