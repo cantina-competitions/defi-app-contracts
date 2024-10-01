@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {LockedBalance, Balances} from "./LockedBalance.sol";
+import {LockedBalance, Balances} from "../../reference/MultiFeeDistribution/MFDDataTypes.sol";
 import {IFeeDistribution} from "./IFeeDistribution.sol";
 import {IMintableToken} from "../IMintableToken.sol";
 
