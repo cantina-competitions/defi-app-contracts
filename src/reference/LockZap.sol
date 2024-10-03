@@ -380,7 +380,7 @@ contract LockZap is Initializable, OwnableUpgradeable, PausableUpgradeable, Dust
         returns (uint256)
     {
         if (_lockTypeIndex == 0) revert InvalidLockLength();
-        uint256 rdntAmt = mfd.zapVestingToLp(msg.sender);
+        uint256 rdntAmt = mfd.zapEmissionsToStake(msg.sender);
 
         return
             _zap(_borrow, _asset, _assetAmt, rdntAmt, address(this), msg.sender, _lockTypeIndex, msg.sender, _slippage);

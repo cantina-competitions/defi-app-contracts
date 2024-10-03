@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-struct LockedBalance {
+struct LockType {
+    uint128 duration;
+    uint128 multiplier;
+}
+
+struct StakedLock {
     uint256 amount;
     uint256 unlockTime;
     uint256 multiplier;
@@ -20,42 +25,37 @@ struct Reward {
     uint256 lastUpdateTime;
     uint256 rewardPerTokenStored;
     // tracks already-added balances to handle accrued interest in aToken rewards
-    // for the stakingToken this value is unused and will always be 0
+    // for the stakeToken this value is unused and will always be 0
     uint256 balance;
 }
 
 struct Balances {
-    uint256 total; // sum of earnings and lockings; no use when LP and RDNT is different
-    uint256 unlocked; // RDNT token
-    uint256 locked; // LP token or RDNT token
+    uint256 total; // total staked tokens
+    uint256 locked; // locked staked tokens
+    uint256 unlocked; // unlocked stake tokens
     uint256 lockedWithMultiplier; // Multiplied locked amount
-    uint256 earned; // RDNT token
 }
 
 struct MultiFeeInitializerParams {
     address emissionToken;
     address lockZap;
-    address daoTreasury;
-    address priceProvider;
     uint256 rewardDuration;
     uint256 rewardsLookback;
     uint256 lockDuration;
     uint256 burnRatio;
+    address treasury;
     uint256 vestDuration;
 }
 
 struct MultiFeeDistributionStorage {
     /// Addresses
     address bountyManager;
-    address daoTreasury;
     address emissionToken;
-    address incentivesController;
     address lockZap;
-    address operationExpenseReceiver;
-    address priceProvider;
-    address rewardConverter;
-    address stakingToken;
-    address starfleetTreasury;
+    address opsTreasury;
+    address rewardCompounder;
+    address stakeToken;
+    address treasury;
     /// Config
     uint256 burnRatio; // Proportion of burn amount
     uint256 defaultLockDuration; // Duration of lock/earned penalty period, used for earnings
@@ -63,8 +63,7 @@ struct MultiFeeDistributionStorage {
     uint256 lockedSupply; // Total locked value
     uint256 lockedSupplyWithMultiplier; // Total locked value including multipliers
     uint256 vestDuration; // Duration of vesting emission token
-    uint256[] lockPeriods; // Time lengths for locks
-    uint256[] lockMultipliers; // Multipliers for locks
+    LockType[] lockTypes; // locks
     mapping(address => bool) emissionDistributors; // Addresses approved to call mint
     /// Rewards info
     uint256 rewardDuration; // Duration that rev rewards are streamed over
@@ -74,8 +73,7 @@ struct MultiFeeDistributionStorage {
     mapping(address => Reward) rewardData; // Reward data per token
     /// User info
     mapping(address => Balances) userBalances; // User balances
-    mapping(address => LockedBalance[]) userLocks; // User locks
-    mapping(address => LockedBalance[]) userEarnings; // User earnings
+    mapping(address => StakedLock[]) userLocks; // User locks
     mapping(address => uint256) userSlippage; // User's defined max slippage used when performing compound trades
     mapping(address => uint256) defaultLockIndex; // Default lock index for relock
     mapping(address => uint256) lastClaimTime; // Last claim time of the user
