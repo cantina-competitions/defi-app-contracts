@@ -67,7 +67,6 @@ contract MultiFeeDistribution is
     /// Custom Errors
     error AddressZero();
     error AmountZero();
-    error InvalidBurn();
     error InvalidRatio();
     error InvalidLookback();
     error InsufficientPermission();
@@ -109,9 +108,7 @@ contract MultiFeeDistribution is
      * - rewardDuration Duration that rev rewards are streamed over
      * - rewardsLookback Duration that rewards loop back
      * - lockDuration lock duration
-     * - burnRatio Proportion of burn amount
      * - treasury DAO address
-     * - vestDuration vest duration
      */
     function initialize(MultiFeeInitializerParams calldata initParams) public initializer {
         _checkNoZeroAddress(initParams.emissionToken);
@@ -120,8 +117,6 @@ contract MultiFeeDistribution is
         _checkZeroAmount(initParams.rewardDuration);
         _checkZeroAmount(initParams.rewardsLookback);
         _checkZeroAmount(initParams.lockDuration);
-        _checkZeroAmount(initParams.vestDuration);
-        if (initParams.burnRatio > _WHOLE) revert InvalidBurn();
         if (initParams.rewardsLookback > initParams.rewardDuration) revert InvalidLookback();
 
         __Ownable_init(_msgSender());
@@ -129,8 +124,6 @@ contract MultiFeeDistribution is
 
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
         $.defaultLockDuration = initParams.lockDuration;
-        $.burnRatio = initParams.burnRatio;
-        $.vestDuration = initParams.vestDuration;
 
         $.emissionToken = initParams.emissionToken;
         $.lockZap = initParams.lockZap;

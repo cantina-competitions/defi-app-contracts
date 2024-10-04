@@ -42,9 +42,7 @@ struct MultiFeeInitializerParams {
     uint256 rewardDuration;
     uint256 rewardsLookback;
     uint256 lockDuration;
-    uint256 burnRatio;
     address treasury;
-    uint256 vestDuration;
 }
 
 struct MultiFeeDistributionStorage {
@@ -57,12 +55,10 @@ struct MultiFeeDistributionStorage {
     address stakeToken;
     address treasury;
     /// Config
-    uint256 burnRatio; // Proportion of burn amount
     uint256 defaultLockDuration; // Duration of lock/earned penalty period, used for earnings
     uint256 operationExpenseRatio; // Reward ratio for operation expenses
     uint256 lockedSupply; // Total locked value
     uint256 lockedSupplyWithMultiplier; // Total locked value including multipliers
-    uint256 vestDuration; // Duration of vesting emission token
     LockType[] lockTypes; // locks
     mapping(address => bool) emissionDistributors; // Addresses approved to call mint
     /// Rewards info
