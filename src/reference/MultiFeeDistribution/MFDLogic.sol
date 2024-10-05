@@ -219,7 +219,7 @@ library MFDLogic {
         Reward storage r = $.rewardData[_token];
         uint256 periodFinish = r.periodFinish;
         if (periodFinish == 0) revert MFDLogic_invalidPeriod();
-        if (periodFinish < block.timestamp + $.rewardDuration - $.rewardsLookback) {
+        if (periodFinish < block.timestamp + $.rewardStreamTime - $.rewardsLookback) {
             uint256 unseen = IERC20(_token).balanceOf(address(this)) - r.balance;
             if (unseen > 0) {
                 _handleUnseenReward($, _token, unseen);
@@ -276,15 +276,15 @@ library MFDLogic {
 
         Reward storage r = $.rewardData[_rewardToken];
         if (block.timestamp >= r.periodFinish) {
-            r.rewardPerSecond = (_rewardAmt * RPS_PRECISION) / $.rewardDuration;
+            r.rewardPerSecond = (_rewardAmt * RPS_PRECISION) / $.rewardStreamTime;
         } else {
             uint256 remaining = r.periodFinish - block.timestamp;
             uint256 leftover = (remaining * r.rewardPerSecond) / RPS_PRECISION;
-            r.rewardPerSecond = ((_rewardAmt + leftover) * RPS_PRECISION) / $.rewardDuration;
+            r.rewardPerSecond = ((_rewardAmt + leftover) * RPS_PRECISION) / $.rewardStreamTime;
         }
 
         r.lastUpdateTime = block.timestamp;
-        r.periodFinish = block.timestamp + $.rewardDuration;
+        r.periodFinish = block.timestamp + $.rewardStreamTime;
         r.balance = r.balance + _rewardAmt;
 
         uint256 rewardUsdValue = 1; // TODO: Implement method to get USD value of the `_rewardAmt`

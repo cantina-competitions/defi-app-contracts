@@ -13,22 +13,24 @@ library MultiFeeDistributionDeployer {
     function deploy(
         FileSystem fs,
         string memory contractLabel,
+        bool forTesting,
         bool onlyImplementation,
         MultiFeeInitializerParams memory params
     ) internal returns (MultiFeeDistribution) {
         string memory chainName = fs.getChainName(block.chainid);
-
-        console.log("Deploying MultiFeeDistribution...");
         MultiFeeDistribution instance = new MultiFeeDistribution();
-        console.log("MultiFeeDistribution implementation:", address(instance));
-
         if (onlyImplementation) {
-            fs.saveAddress(contractLabel, chainName, address(instance));
-            console.log("Saved MultiFeeDistribution filesystem:", address(instance));
+            if (!forTesting) {
+                console.log("MultiFeeDistribution implementation deployed:", address(instance));
+                fs.saveAddress(contractLabel, chainName, address(instance));
+                console.log("Saved MultiFeeDistribution filesystem:", address(instance));
+            }
             return instance;
         } else {
             bytes memory initData = abi.encodeWithSelector(MultiFeeDistribution.initialize.selector, params);
-            return MultiFeeDistribution(ERC1967ProxyDeployer.deploy(fs, contractLabel, address(instance), initData));
+            return MultiFeeDistribution(
+                ERC1967ProxyDeployer.deploy(fs, contractLabel, forTesting, address(instance), initData)
+            );
         }
     }
 }

@@ -6,21 +6,23 @@ import {FileSystem} from "../utils/FileSystem.s.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 library ERC1967ProxyDeployer {
-    function deploy(FileSystem fs, string memory contractLabel, address implementation, bytes memory initData)
-        internal
-        returns (address)
-    {
+    function deploy(
+        FileSystem fs,
+        string memory contractLabel,
+        bool forTesting,
+        address implementation,
+        bytes memory initData
+    ) internal returns (address) {
         string memory chainName = fs.getChainName(block.chainid);
-
-        address proxy;
         bytes memory contructorArgs = abi.encode(implementation, initData);
-        console.log("ERC1967Proxy constructor arguments:");
-        console.logBytes(contructorArgs);
+        address proxy = address(new ERC1967Proxy(implementation, initData));
 
-        proxy = address(new ERC1967Proxy(implementation, initData));
-
-        console.log("ERC1967Proxy deployed:", proxy);
-        fs.saveAddress(contractLabel, chainName, proxy);
+        if (!forTesting) {
+            console.log("ERC1967Proxy constructor arguments:");
+            console.logBytes(contructorArgs);
+            console.log("ERC1967Proxy deployed:", proxy);
+            fs.saveAddress(contractLabel, chainName, proxy);
+        }
         return proxy;
     }
 }
