@@ -13,12 +13,6 @@ struct StakedLock {
     uint256 duration;
 }
 
-struct EarnedBalance {
-    uint256 amount;
-    uint256 unlockTime;
-    uint256 penalty;
-}
-
 struct Reward {
     uint256 periodFinish;
     uint256 rewardPerSecond;
@@ -38,35 +32,31 @@ struct Balances {
 
 struct MultiFeeInitializerParams {
     address emissionToken;
-    address lockZap;
-    uint256 rewardDuration;
+    address stakeToken;
+    uint256 rewardStreamTime;
     uint256 rewardsLookback;
-    uint256 lockDuration;
-    uint256 burnRatio;
-    address treasury;
-    uint256 vestDuration;
+    LockType[] initLockTypes;
+    uint256 defaultLockTypeIndex;
+    address lockZap;
 }
 
 struct MultiFeeDistributionStorage {
     /// Addresses
-    address bountyManager;
     address emissionToken;
-    address lockZap;
-    address opsTreasury;
-    address rewardCompounder;
     address stakeToken;
-    address treasury;
-    /// Config
-    uint256 burnRatio; // Proportion of burn amount
-    uint256 defaultLockDuration; // Duration of lock/earned penalty period, used for earnings
+    address lockZap;
+    address bountyManager;
+    address rewardCompounder;
+    // OpEx
+    address opsTreasury;
     uint256 operationExpenseRatio; // Reward ratio for operation expenses
-    uint256 lockedSupply; // Total locked value
+    /// Config
+    uint256 lockedSupply; // Total locked staked tokens in the contract
     uint256 lockedSupplyWithMultiplier; // Total locked value including multipliers
-    uint256 vestDuration; // Duration of vesting emission token
-    LockType[] lockTypes; // locks
+    LockType[] lockTypes; // lock types
     mapping(address => bool) emissionDistributors; // Addresses approved to call mint
     /// Rewards info
-    uint256 rewardDuration; // Duration that rev rewards are streamed over
+    uint256 rewardStreamTime; // Duration that rev rewards are streamed over
     uint256 rewardsLookback; // Duration that rewards loop back
     address[] rewardTokens; // Reward tokens being distributed
     mapping(address => bool) isRewardToken; // Stores whether a token is being destibuted to dLP lockers

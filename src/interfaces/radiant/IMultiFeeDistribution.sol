@@ -12,7 +12,7 @@ interface IMultiFeeDistribution is IFeeDistribution {
 
     function stake(uint256 _amount, address _onBehalfOf, uint256 _typeIndex) external;
 
-    function getStakedLocks(address _user) external view returns (StakedLock[] memory);
+    function getUserLocks(address _user) external view returns (StakedLock[] memory);
 
     function autocompoundDisabled(address _user) external view returns (bool);
 
@@ -22,7 +22,7 @@ interface IMultiFeeDistribution is IFeeDistribution {
 
     function stakedBalance(address _user) external view returns (uint256);
 
-    function getBalances(address _user) external view returns (Balances memory);
+    function getUserBalances(address _user) external view returns (Balances memory);
 
     function zapEmissionsToStake(address _address) external returns (uint256);
 

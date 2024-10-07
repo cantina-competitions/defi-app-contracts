@@ -14,7 +14,6 @@ import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
 import {IMultiFeeDistribution, IFeeDistribution} from "../../interfaces/radiant/IMultiFeeDistribution.sol";
 import {
     Balances,
-    EarnedBalance,
     LockType,
     Reward,
     StakedLock,
@@ -54,7 +53,6 @@ contract MultiFeeDistribution is
     event BountyManagerUpdated(address indexed bounty);
     event RewardConverterUpdated(address indexed rewardCompounder);
     event LockTypesUpdated(LockType[] lockTypes);
-    event TreasuryUpdated(address indexed treasury);
     event StakeTokenUpdated(address indexed stakeToken);
     event RewardAdded(address indexed rewardToken);
     event LockerAdded(address indexed locker);
@@ -67,19 +65,13 @@ contract MultiFeeDistribution is
     /// Custom Errors
     error AddressZero();
     error AmountZero();
-    error InvalidBurn();
     error InvalidRatio();
     error InvalidLookback();
     error InsufficientPermission();
     error AlreadyAdded();
-    error AlreadySet();
     error InvalidType();
-    error ActiveReward();
     error InvalidAmount();
-    error InvalidEarned();
-    error InvalidTime();
     error InvalidPeriod();
-    error UnlockTimeNotFound();
     error InvalidAddress();
     error InvalidAction();
 
@@ -100,45 +92,40 @@ contract MultiFeeDistribution is
 
     /**
      * @dev Initializer
-     *  First reward MUST be the `emissionToken` or things will break
-     *  related to the 50% penalty and distribution to locked balances.
+     *  First reward MUST be the `emissionToken`
      * @param initParams MultiFeeInitializerParams
-     * - emissionToken RDNT token address
-     * - lockZap LockZap contract address
-     * - priceProvider PriceProvider contract address
-     * - rewardDuration Duration that rev rewards are streamed over
+     * - emissionToken address
+     * - stakeToken address
+     * - rewardStreamTime Duration that rev rewards are streamed over
      * - rewardsLookback Duration that rewards loop back
-     * - lockDuration lock duration
-     * - burnRatio Proportion of burn amount
-     * - treasury DAO address
-     * - vestDuration vest duration
+     * - initLockTypes array of LockType
+     * - defaultLockTypeIndex index in `initLockTypes` to be used as default
+     * - lockZap contract address
      */
     function initialize(MultiFeeInitializerParams calldata initParams) public initializer {
         _checkNoZeroAddress(initParams.emissionToken);
+        _checkNoZeroAddress(initParams.stakeToken);
         _checkNoZeroAddress(initParams.lockZap);
-        _checkNoZeroAddress(initParams.treasury);
-        _checkZeroAmount(initParams.rewardDuration);
+        _checkZeroAmount(initParams.rewardStreamTime);
         _checkZeroAmount(initParams.rewardsLookback);
-        _checkZeroAmount(initParams.lockDuration);
-        _checkZeroAmount(initParams.vestDuration);
-        if (initParams.burnRatio > _WHOLE) revert InvalidBurn();
-        if (initParams.rewardsLookback > initParams.rewardDuration) revert InvalidLookback();
+        _checkZeroAmount(initParams.initLockTypes.length);
 
         __Ownable_init(_msgSender());
         __Pausable_init();
 
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        $.defaultLockDuration = initParams.lockDuration;
-        $.burnRatio = initParams.burnRatio;
-        $.vestDuration = initParams.vestDuration;
-
         $.emissionToken = initParams.emissionToken;
+        $.stakeToken = initParams.stakeToken;
         $.lockZap = initParams.lockZap;
+
+        _setLockTypes(initParams.initLockTypes);
+
+        if (initParams.rewardsLookback > initParams.rewardStreamTime) revert InvalidLookback();
+        $.rewardStreamTime = initParams.rewardStreamTime;
+        $.rewardsLookback = initParams.rewardsLookback;
 
         $.rewardTokens.push(initParams.emissionToken);
         $.rewardData[initParams.emissionToken].lastUpdateTime = block.timestamp;
-        $.rewardDuration = initParams.rewardDuration;
-        $.rewardsLookback = initParams.rewardsLookback;
     }
 
     /// View functions
@@ -168,10 +155,25 @@ contract MultiFeeDistribution is
     }
 
     /**
-     * @notice Get all user's locks
-     * @return locks array of StakedLock
+     * @notice Returns total locked staked token.
      */
-    function getStakedLocks(address _user) public view returns (StakedLock[] memory locks) {
+    function getLockedSupply() external view returns (uint256) {
+        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        return $.lockedSupply;
+    }
+
+    /**
+     * @notice Returns total locked staked token with multiplier.
+     */
+    function getLockedSupplyWithMultiplier() external view returns (uint256) {
+        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        return $.lockedSupplyWithMultiplier;
+    }
+
+    /**
+     * @notice Get all user's locks
+     */
+    function getUserLocks(address _user) public view returns (StakedLock[] memory) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
         return $.userLocks[_user];
     }
@@ -180,7 +182,7 @@ contract MultiFeeDistribution is
      * @notice Returns sum of user's expired locked balances
      */
     function getExpiredStakeBalance(address _user) public view returns (uint256 unlockable) {
-        StakedLock[] memory locks = getStakedLocks(_user);
+        StakedLock[] memory locks = getUserLocks(_user);
         uint256 len = locks.length;
         uint256 currentTimestamp = block.timestamp;
         for (uint256 i; i < len;) {
@@ -195,12 +197,12 @@ contract MultiFeeDistribution is
 
     /**
      * @notice Returns the recorded `Balance` struct of  `_user`.
-     * - emissionTokens; // emission tokens earned including vested and unvested
-     * - unvestedEmissionTokens; // emission tokens that can be withdrawn
-     * - lockedStakeTokens; // locked stake tokens
-     * - lockedWithMultiplier; // Multiplied locked amount
+     *  - total // total amount of staked tokens (both locked and unlocked)
+     *  - locked // total locked staked tokens
+     *  - unlocked // total unlocked stake tokens (can be withdrawn)
+     * - lockedWithMultiplier // Multiplied locked amount
      */
-    function getBalances(address _user) external view returns (Balances memory) {
+    function getUserBalances(address _user) external view returns (Balances memory) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
         return $.userBalances[_user];
     }
@@ -214,11 +216,11 @@ contract MultiFeeDistribution is
     }
 
     /**
-     * @notice Returns the `_rewardToken` amount estimated for the `rewardDuration` period.
+     * @notice Returns the `_rewardToken` amount estimated for the `rewardStreamTime` period.
      */
     function getRewardForDuration(address _rewardToken) external view returns (uint256) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        return ($.rewardData[_rewardToken].rewardPerSecond * $.rewardDuration) / _RPS_PRECISION;
+        return ($.rewardData[_rewardToken].rewardPerSecond * $.rewardStreamTime) / _RPS_PRECISION;
     }
 
     /**
@@ -355,16 +357,6 @@ contract MultiFeeDistribution is
         _unpause();
     }
 
-    /**
-     * @notice Requalify user for reward elgibility
-     * @param _user address
-     * TODO: confirm remove
-     */
-    // function requalifyFor(address _user) public {
-    //     MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-    //     IChefIncentivesController($.incentivesController).afterLockUpdate(_user);
-    // }
-
     /// Setters
 
     /**
@@ -413,39 +405,7 @@ contract MultiFeeDistribution is
      * @param _lockTypes array of LockType
      */
     function setLockTypes(LockType[] memory _lockTypes) external onlyOwner {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        delete $.lockTypes;
-        uint256 len = _lockTypes.length;
-        for (uint256 i; i < len;) {
-            $.lockTypes.push(_lockTypes[i]);
-            unchecked {
-                i++;
-            }
-        }
-        emit LockTypesUpdated(_lockTypes);
-    }
-
-    /**
-     * @notice Set Treasury.
-     * @param _treasury address
-     */
-    function setTreasury(address _treasury) external onlyOwner {
-        _checkNoZeroAddress(_treasury);
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        $.treasury = _treasury;
-        emit TreasuryUpdated(_treasury);
-    }
-
-    /**
-     * @notice Set Staking token.
-     * @param _stakeToken address
-     */
-    function setLPToken(address _stakeToken) external onlyOwner {
-        _checkNoZeroAddress(_stakeToken);
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if ($.stakeToken != address(0)) revert AlreadySet();
-        $.stakeToken = _stakeToken;
-        emit StakeTokenUpdated(_stakeToken);
+        _setLockTypes(_lockTypes);
     }
 
     /**
@@ -569,7 +529,7 @@ contract MultiFeeDistribution is
     function setLookback(uint256 _lookback) external onlyOwner {
         _checkZeroAmount(_lookback);
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (_lookback > $.rewardDuration) revert InvalidLookback();
+        if (_lookback > $.rewardStreamTime) revert InvalidLookback();
         $.rewardsLookback = _lookback;
         // TODO add event here
     }
@@ -751,7 +711,6 @@ contract MultiFeeDistribution is
         } else {
             if (_doTransfer) {
                 IERC20($.stakeToken).safeTransfer(_address, amount);
-                // IChefIncentivesController($.incentivesController).afterLockUpdate(_address); // TODO: confirm remove
                 emit Withdrawn(_address, amount, $.userBalances[_address].locked, 0, 0, $.stakeToken != $.emissionToken);
             } else {
                 revert InvalidAction();
@@ -768,6 +727,20 @@ contract MultiFeeDistribution is
 
     function _checkZeroAmount(uint256 _amount) internal pure {
         if (_amount == 0) revert AmountZero();
+    }
+
+    function _setLockTypes(LockType[] memory _lockTypes) internal {
+        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        delete $.lockTypes;
+        uint256 len = _lockTypes.length;
+        for (uint256 i; i < len;) {
+            if (_lockTypes[i].duration == 0) revert InvalidPeriod();
+            $.lockTypes.push(_lockTypes[i]);
+            unchecked {
+                i++;
+            }
+        }
+        emit LockTypesUpdated(_lockTypes);
     }
 
     function _authorizeUpgrade(address) internal view override onlyOwner {}
