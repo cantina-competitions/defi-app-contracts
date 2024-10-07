@@ -360,30 +360,8 @@ contract LockZap is Initializable, OwnableUpgradeable, PausableUpgradeable, Dust
         address _onBehalf,
         uint256 _slippage
     ) public payable whenNotPaused returns (uint256) {
-        uint256 duration = mfd.defaultLockIndex(_onBehalf);
+        uint256 duration = mfd.getDefaultLockIndex(_onBehalf);
         return _zap(_borrow, _asset, _assetAmt, _rdntAmt, msg.sender, _onBehalf, duration, _onBehalf, _slippage);
-    }
-
-    /**
-     * @notice Zap tokens from vesting
-     * @param _borrow option to borrow ETH
-     * @param _asset to be used for zapping
-     * @param _assetAmt amount of _asset tokens used to create dLP position
-     * @param _lockTypeIndex lock length index. cannot be shortest option (index 0)
-     * @param _slippage maximum amount of slippage allowed for any occurring trades
-     * @return LP amount
-     */
-    function zapFromVesting(bool _borrow, address _asset, uint256 _assetAmt, uint256 _lockTypeIndex, uint256 _slippage)
-        public
-        payable
-        whenNotPaused
-        returns (uint256)
-    {
-        if (_lockTypeIndex == 0) revert InvalidLockLength();
-        uint256 rdntAmt = mfd.zapEmissionsToStake(msg.sender);
-
-        return
-            _zap(_borrow, _asset, _assetAmt, rdntAmt, address(this), msg.sender, _lockTypeIndex, msg.sender, _slippage);
     }
 
     /**

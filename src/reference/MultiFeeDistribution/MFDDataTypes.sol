@@ -19,7 +19,6 @@ struct Reward {
     uint256 lastUpdateTime;
     uint256 rewardPerTokenStored;
     // tracks already-added balances to handle accrued interest in aToken rewards
-    // for the stakeToken this value is unused and will always be 0
     uint256 balance;
 }
 
@@ -54,7 +53,7 @@ struct MultiFeeDistributionStorage {
     uint256 lockedSupply; // Total locked staked tokens in the contract
     uint256 lockedSupplyWithMultiplier; // Total locked value including multipliers
     LockType[] lockTypes; // lock types
-    mapping(address => bool) emissionDistributors; // Addresses approved to call mint
+    mapping(address => bool) rewardDistributors; // Addresses approved to call mint
     /// Rewards info
     uint256 rewardStreamTime; // Duration that rev rewards are streamed over
     uint256 rewardsLookback; // Duration that rewards loop back

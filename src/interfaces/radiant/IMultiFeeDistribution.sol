@@ -14,25 +14,24 @@ interface IMultiFeeDistribution is IFeeDistribution {
 
     function getUserLocks(address _user) external view returns (StakedLock[] memory);
 
+    function getUserBalances(address _user) external view returns (Balances memory);
+
     function autocompoundDisabled(address _user) external view returns (bool);
 
-    function defaultLockIndex(address _user) external view returns (uint256);
+    function getDefaultLockIndex(address _user) external view returns (uint256);
 
     function autoRelockDisabled(address _user) external view returns (bool);
 
-    function stakedBalance(address _user) external view returns (uint256);
+    function getUserClaimableRewards(address _account)
+        external
+        view
+        returns (IFeeDistribution.RewardData[] memory rewards);
 
-    function getUserBalances(address _user) external view returns (Balances memory);
-
-    function zapEmissionsToStake(address _address) external returns (uint256);
-
-    function claimableRewards(address _account) external view returns (IFeeDistribution.RewardData[] memory rewards);
-
-    function setDefaultRelockTypeIndex(uint256 _index) external;
+    function setDefaultLockIndex(uint256 _index) external;
 
     function userSlippage(address) external view returns (uint256);
 
-    function claimFromConverter(address) external;
+    function claimAndCompound(address) external;
 }
 
 interface IMFDPlus is IMultiFeeDistribution {
