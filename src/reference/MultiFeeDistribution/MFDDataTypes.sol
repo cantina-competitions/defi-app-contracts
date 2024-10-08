@@ -13,20 +13,24 @@ struct StakedLock {
     uint256 duration;
 }
 
-struct Reward {
-    uint256 periodFinish;
-    uint256 rewardPerSecond;
-    uint256 lastUpdateTime;
-    uint256 rewardPerTokenStored;
-    // tracks already-added balances to handle accrued interest in aToken rewards
-    uint256 balance;
-}
-
 struct Balances {
     uint256 total; // total staked tokens
     uint256 locked; // locked staked tokens
     uint256 unlocked; // unlocked stake tokens
     uint256 lockedWithMultiplier; // Multiplied locked amount
+}
+
+struct Reward {
+    uint256 periodFinish; // tracks when current stream of reward ends
+    uint256 rewardPerSecond; // tracks the reward per second for the current stream
+    uint256 lastUpdateTime; // tracks the last time this reward data was updated
+    uint256 rewardPerTokenStored; // tracks the reward per token stored for the current stream
+    uint256 balance; // records "seen" balances to handle accrued interest in rebasing rewards (i.e. aTokens)
+}
+
+struct ClaimableReward {
+    address token;
+    uint256 amount;
 }
 
 struct MultiFeeInitializerParams {

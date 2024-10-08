@@ -21,6 +21,7 @@ library MFDLogic {
     error MFDLogic_invalidPeriod();
     error MFDLogic_invalidType();
     error MGDLogic_invalidAction();
+    error MGDLogic_noUnlockedTokens();
 
     /**
      * @dev Library logic to stake `stakeTokens` and receive rewards. Locked tokens cannot
@@ -151,6 +152,7 @@ library MFDLogic {
         uint256 amountWithMultiplier;
         Balances storage bal = $.userBalances[_address];
         (amount, amountWithMultiplier) = _cleanWithdrawableLocks($, _address, _limit);
+        if (amount == 0) revert MGDLogic_noUnlockedTokens();
         bal.locked -= amount;
         bal.lockedWithMultiplier -= amountWithMultiplier;
         bal.total -= amount;
@@ -286,6 +288,7 @@ library MFDLogic {
     function _handleUnseenReward(MultiFeeDistributionStorage storage $, address _rewardToken, uint256 _rewardAmt)
         private
     {
+        // Distribute to ops treasury if applicable
         address _opsTreasury = $.opsTreasury;
         uint256 _operationExpenseRatio = $.operationExpenseRatio;
         if (_opsTreasury != address(0) && _operationExpenseRatio != 0) {
@@ -296,6 +299,7 @@ library MFDLogic {
             }
         }
 
+        // Update reward per second according to the new reward amount
         Reward storage r = $.rewardData[_rewardToken];
         if (block.timestamp >= r.periodFinish) {
             r.rewardPerSecond = (_rewardAmt * PRECISION) / $.rewardStreamTime;

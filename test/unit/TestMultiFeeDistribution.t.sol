@@ -50,17 +50,13 @@ contract TestUnitMultiFeeDistribution is BaseFixture {
             lockZap: address(1)
         });
 
+        vm.startPrank(Admin.addr);
         mfd = MultiFeeDistributionDeployer.deploy(fs, "MultiFeeDistribution", TESTING_ONLY, false, params);
+        vm.stopPrank();
     }
 
     function test_userCanStakeAndStateUpdatesProperly(uint128 _amount) public {
-        // uint256 _amount = 100 * ONE_UNIT;
-        stakeToken.mint(User1.addr, _amount);
-
-        vm.startPrank(User1.addr);
-        stakeToken.approve(address(mfd), _amount);
-        mfd.stake(_amount, User1.addr, ONE_MONTH_TYPE_INDEX);
-        vm.stopPrank();
+        stake_in_mfd(User1.addr, _amount, ONE_MONTH_TYPE_INDEX);
 
         // Check proper value transfer of stakeToken
         assertEq(stakeToken.balanceOf(address(mfd)), _amount);
@@ -88,5 +84,95 @@ contract TestUnitMultiFeeDistribution is BaseFixture {
             assertEq(balances.unlocked, 0);
             assertEq(balances.lockedWithMultiplier, _amount * ONE_MONTH_MULTIPLIER);
         }
+    }
+
+    function test_rewardDistributionWorks() public {
+        uint256 user1Amount = 80 * ONE_UNIT;
+        uint256 user2Amount = 20 * ONE_UNIT;
+        stake_in_mfd(User1.addr, user1Amount, ONE_MONTH_TYPE_INDEX);
+        stake_in_mfd(User2.addr, user2Amount, ONE_MONTH_TYPE_INDEX);
+
+        // Set a timestamp
+        uint256 timestamp = 1_728_370_800;
+        vm.warp(timestamp);
+
+        // Distribute rewards
+        uint256 rewardAmount = 700 * ONE_UNIT;
+        distribute_rewards_to_mfd(emissionToken, rewardAmount);
+
+        // Check proper storage of reward data
+        assertEq(mfd.getRewardData(address(emissionToken)).balance, rewardAmount);
+        assertEq(mfd.getRewardData(address(emissionToken)).periodFinish, timestamp + 7 days);
+        assertEq(mfd.getRewardData(address(emissionToken)).lastUpdateTime, timestamp);
+        uint256 rewardPerSecond = (rewardAmount * ONE_UNIT) / 7 days;
+        assertEq(mfd.getRewardData(address(emissionToken)).rewardPerSecond, rewardPerSecond);
+        assertEq(mfd.getRewardData(address(emissionToken)).rewardPerTokenStored, 0);
+
+        // Rewards distributed in 1 day
+        uint256 expectedRewardsDistributed = rewardPerSecond * 1 days / ONE_UNIT; // rps is scaled by 1e18
+        vm.warp(timestamp + 1 days);
+        vm.roll(1);
+
+        // Check proper claimable amounts for each user
+        assertEq(
+            mfd.getUserClaimableRewards(User1.addr)[0].amount,
+            (expectedRewardsDistributed * user1Amount) / (user1Amount + user2Amount)
+        );
+        assertEq(
+            mfd.getUserClaimableRewards(User2.addr)[0].amount,
+            (expectedRewardsDistributed * user2Amount) / (user1Amount + user2Amount)
+        );
+    }
+
+    function test_userCanWithdrawExpiredLocks() public {
+        // Set a timestamp
+        uint256 timestamp = 1_728_370_800;
+        vm.warp(timestamp);
+
+        uint256 amount = 100 * ONE_UNIT;
+        stake_in_mfd(User1.addr, amount, ONE_MONTH_TYPE_INDEX);
+
+        // Check that user cannot withdraw before lock expires
+        vm.expectRevert();
+        vm.prank(User1.addr);
+        mfd.withdrawExpiredLocks();
+        assertEq(stakeToken.balanceOf(User1.addr), 0);
+
+        // Check that user can withdraw after lock expires
+        vm.warp(timestamp + 31 days);
+        vm.roll(1);
+        vm.prank(User1.addr);
+        mfd.withdrawExpiredLocks();
+        assertEq(stakeToken.balanceOf(User1.addr), amount);
+
+        // Check state updates properly
+        assertEq(mfd.getUserBalances(User1.addr).total, 0);
+        assertEq(mfd.getUserBalances(User1.addr).locked, 0);
+        assertEq(mfd.getUserBalances(User1.addr).unlocked, 0);
+        assertEq(mfd.getUserBalances(User1.addr).lockedWithMultiplier, 0);
+        assertEq(mfd.getLockedSupply(), 0);
+        assertEq(mfd.getLockedSupplyWithMultiplier(), 0);
+    }
+
+    function stake_in_mfd(address user, uint256 amount, uint256 lockTypeIndex) internal {
+        stakeToken.mint(user, amount);
+        vm.startPrank(user);
+        stakeToken.approve(address(mfd), amount);
+        mfd.stake(amount, user, lockTypeIndex);
+        vm.stopPrank();
+    }
+
+    function distribute_rewards_to_mfd(MockToken token, uint256 amount) internal {
+        token.mint(Admin.addr, amount);
+        vm.startPrank(Admin.addr);
+        token.approve(address(mfd), amount);
+        mfd.distributeAndTrackReward(address(emissionToken), amount);
+        vm.stopPrank();
+    }
+
+    function distribute_unseen_rewards_to_mfd(MockToken token, uint256 amount) internal {
+        token.mint(Admin.addr, amount);
+        vm.prank(Admin.addr);
+        token.transfer(address(mfd), amount);
     }
 }

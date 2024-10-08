@@ -9,16 +9,16 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Pau
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 import {RecoverERC20} from "../helpers/RecoverERC20.sol";
-// import {IChefIncentivesController} from "../../interfaces/radiant/IChefIncentivesController.sol"; // TODO: confirm remove
 import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
-import {IMultiFeeDistribution, IFeeDistribution} from "../../interfaces/radiant/IMultiFeeDistribution.sol";
+import {IMultiFeeDistribution} from "../../interfaces/radiant/IMultiFeeDistribution.sol";
 import {
     Balances,
+    ClaimableReward,
     LockType,
-    Reward,
-    StakedLock,
     MultiFeeInitializerParams,
-    MultiFeeDistributionStorage
+    MultiFeeDistributionStorage,
+    Reward,
+    StakedLock
 } from "./MFDDataTypes.sol";
 import {MFDLogic} from "./MFDLogic.sol";
 
@@ -126,6 +126,7 @@ contract MultiFeeDistribution is
         $.isRewardToken[initParams.emissionToken] = true;
         $.rewardData[initParams.emissionToken].lastUpdateTime = block.timestamp;
         $.rewardData[initParams.emissionToken].periodFinish = block.timestamp;
+        $.rewardDistributors[_msgSender()] = true;
         emit RewardUpdated(initParams.emissionToken, true);
     }
 
@@ -186,39 +187,38 @@ contract MultiFeeDistribution is
      *  - unlocked // total unlocked stake tokens (can be withdrawn)
      * - lockedWithMultiplier // Multiplied locked amount
      */
-    function getUserBalances(address _user) public view returns (Balances memory) {
+    function getUserBalances(address _user) public view returns (Balances memory latestUserBalances) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        return $.userBalances[_user];
+        latestUserBalances.total = $.userBalances[_user].total;
+        (uint256 unlocked, uint256 unlockedWithMultiplier) = _getUnlockedBalance(_user);
+        latestUserBalances.locked = latestUserBalances.total - unlocked;
+        latestUserBalances.unlocked = unlocked;
+        latestUserBalances.lockedWithMultiplier = $.userBalances[_user].lockedWithMultiplier - unlockedWithMultiplier;
     }
 
     /**
      * @notice Get the claimable amount of all reward tokens for given `_account`.
      * @param _account for rewards
-     * @return rewardsData array of rewards
+     * @return claimable array of rewards
      */
-    function getUserClaimableRewards(address _account)
-        public
-        view
-        returns (IFeeDistribution.RewardData[] memory rewardsData)
-    {
+    function getUserClaimableRewards(address _account) public view returns (ClaimableReward[] memory claimable) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        rewardsData = new IFeeDistribution.RewardData[]($.rewardTokens.length);
+        claimable = new ClaimableReward[]($.rewardTokens.length);
 
         uint256 length = $.rewardTokens.length;
         for (uint256 i; i < length;) {
-            rewardsData[i].token = $.rewardTokens[i];
-            rewardsData[i].amount = MFDLogic.calculateRewardEarned(
+            claimable[i].token = $.rewardTokens[i];
+            claimable[i].amount = MFDLogic.calculateRewardEarned(
                 $,
                 _account,
-                rewardsData[i].token,
+                claimable[i].token,
                 $.userBalances[_account].lockedWithMultiplier,
-                MFDLogic.rewardPerToken($, rewardsData[i].token)
+                MFDLogic.rewardPerToken($, claimable[i].token)
             ) / PRECISION;
             unchecked {
                 i++;
             }
         }
-        return rewardsData;
     }
 
     /**
@@ -283,13 +283,13 @@ contract MultiFeeDistribution is
     }
 
     /**
-     * @notice Claim all staking `_rewards` received for staking by `msg.sender`.
+     * @notice Claim all staking `_rewards` received for staking by `_msgSender()`.
      * @param _rewardTokens array of reward tokens
      */
     function claimRewards(address[] memory _rewardTokens) public whenNotPaused {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        MFDLogic.updateReward($, msg.sender);
-        MFDLogic.claimRewardsLogic($, msg.sender, _rewardTokens);
+        MFDLogic.updateReward($, _msgSender());
+        MFDLogic.claimRewardsLogic($, _msgSender(), _rewardTokens);
     }
 
     /**
@@ -301,12 +301,12 @@ contract MultiFeeDistribution is
     }
 
     /**
-     * @notice Withdraw expired locks for `msg.sender`.
+     * @notice Withdraw expired locks for `_msgSender()`.
      * @return withdraw amount
      */
     function withdrawExpiredLocks() external whenNotPaused returns (uint256) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        return MFDLogic.handleWithdrawOrRelockLogic($, msg.sender, false, true, $.userLocks[msg.sender].length);
+        return MFDLogic.handleWithdrawOrRelockLogic($, _msgSender(), false, true, $.userLocks[_msgSender()].length);
     }
 
     /**
@@ -317,7 +317,7 @@ contract MultiFeeDistribution is
      */
     function claimBounty(address _user, bool _execute) public whenNotPaused returns (bool issueBaseBounty) {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (msg.sender != $.bountyManager) revert InsufficientPermission();
+        if (_msgSender() != $.bountyManager) revert InsufficientPermission();
         if (getUserBalances(_user).unlocked == 0) {
             return (false);
         } else {
@@ -327,7 +327,6 @@ contract MultiFeeDistribution is
         if (!_execute) {
             return (issueBaseBounty);
         }
-
         trackUnseenRewards();
 
         // Withdraw the user's expried locks
@@ -355,8 +354,8 @@ contract MultiFeeDistribution is
     function setDefaultLockIndex(uint256 _lockIndex) external {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
         if (_lockIndex >= $.lockTypes.length) revert InvalidType();
-        $.defaultLockIndex[msg.sender] = _lockIndex;
-        emit DefaultLockIndexUpdated(msg.sender, _lockIndex);
+        $.defaultLockIndex[_msgSender()] = _lockIndex;
+        emit DefaultLockIndexUpdated(_msgSender(), _lockIndex);
     }
 
     /**
@@ -366,7 +365,7 @@ contract MultiFeeDistribution is
      */
     function setAutocompound(bool _enable, uint256 _slippage) external {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (_enable == $.autocompoundDisabled[msg.sender]) {
+        if (_enable == $.autocompoundDisabled[_msgSender()]) {
             toggleAutocompound();
         }
         setUserSlippage(_slippage);
@@ -377,9 +376,9 @@ contract MultiFeeDistribution is
      */
     function toggleAutocompound() public {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        bool newStatus = !$.autocompoundDisabled[msg.sender];
-        $.autocompoundDisabled[msg.sender] = newStatus;
-        emit UserAutocompoundUpdated(msg.sender, newStatus);
+        bool newStatus = !$.autocompoundDisabled[_msgSender()];
+        $.autocompoundDisabled[_msgSender()] = newStatus;
+        emit UserAutocompoundUpdated(_msgSender(), newStatus);
     }
 
     /**
@@ -391,8 +390,8 @@ contract MultiFeeDistribution is
             revert InvalidAmount();
         }
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        $.userSlippage[msg.sender] = _slippage;
-        emit UserSlippageUpdated(msg.sender, _slippage);
+        $.userSlippage[_msgSender()] = _slippage;
+        emit UserSlippageUpdated(_msgSender(), _slippage);
     }
 
     /**
@@ -401,7 +400,7 @@ contract MultiFeeDistribution is
      */
     function setAutoRelock(bool status) external virtual {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        $.autoRelockDisabled[msg.sender] = !status;
+        $.autoRelockDisabled[_msgSender()] = !status;
     }
 
     /// Owner Setters
@@ -413,7 +412,7 @@ contract MultiFeeDistribution is
     function addReward(address _rewardToken) external {
         _checkNoZeroAddress(_rewardToken);
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (!$.rewardDistributors[msg.sender]) revert InsufficientPermission();
+        if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
         if ($.rewardData[_rewardToken].lastUpdateTime != 0) revert AlreadyAdded();
         $.rewardTokens.push(_rewardToken);
 
@@ -431,7 +430,7 @@ contract MultiFeeDistribution is
      */
     function removeReward(address _rewardToken) external {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (!$.rewardDistributors[msg.sender]) revert InsufficientPermission();
+        if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
 
         bool isTokenFound;
         uint256 indexToRemove;
@@ -472,9 +471,9 @@ contract MultiFeeDistribution is
      */
     function distributeAndTrackReward(address _reward, uint256 _amount) external {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (!$.rewardDistributors[msg.sender]) revert InsufficientPermission();
+        if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
         if (!$.isRewardToken[_reward]) revert InvalidAddress();
-        IERC20(_reward).safeTransferFrom(msg.sender, address(this), _amount);
+        IERC20(_reward).safeTransferFrom(_msgSender(), address(this), _amount);
         MFDLogic.trackUnseenReward($, _reward);
     }
 
@@ -560,7 +559,7 @@ contract MultiFeeDistribution is
      */
     function claimAndCompound(address _onBehalf) external whenNotPaused {
         MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
-        if (msg.sender != $.rewardCompounder) revert InsufficientPermission();
+        if (_msgSender() != $.rewardCompounder) revert InsufficientPermission();
         MFDLogic.updateReward($, _onBehalf);
         uint256 length = $.rewardTokens.length;
         for (uint256 i; i < length;) {
@@ -616,6 +615,25 @@ contract MultiFeeDistribution is
 
     function _checkZeroAmount(uint256 _amount) internal pure {
         if (_amount == 0) revert AmountZero();
+    }
+
+    function _getUnlockedBalance(address _user)
+        internal
+        view
+        returns (uint256 unlocked, uint256 unlockedWithMultiplier)
+    {
+        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        StakedLock[] storage locks = $.userLocks[_user];
+        uint256 len = locks.length;
+        for (uint256 i; i < len;) {
+            if (locks[i].unlockTime <= block.timestamp) {
+                unlocked += locks[i].amount;
+                unlockedWithMultiplier += locks[i].amount * locks[i].multiplier;
+            }
+            unchecked {
+                i++;
+            }
+        }
     }
 
     function _setLockTypes(LockType[] memory _lockTypes) internal {
