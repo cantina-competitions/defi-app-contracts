@@ -13,8 +13,9 @@ library EpochDistributor {
         EpochDistributorStorage storage $e,
         DefiAppHomeCenterStorage storage $,
         address account,
+        uint256 points,
         uint256 epoch,
-        bytes32[] calldata proof
+        bytes32[] calldata distroProof
     ) public {
         // TODO: Implement the claimLogic function
     }
