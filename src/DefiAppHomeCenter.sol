@@ -1,24 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import {DefiAppHomeCenterStorage, EpochParams, EpochDistributorStorage} from "./libraries/DefiAppDataTypes.sol";
+import {EpochDistributor} from "./libraries/EpochDistributor.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
-    struct EpochParams {
-        uint32 epochDuration;
-        uint32 startTimestamp;
-        uint32 rps;
-    }
-
-    struct DefiAppHomeCenterStorage {
-        address homeToken;
-        uint256 currentEpoch;
-        uint32 defaultRps;
-        uint32 defaultEpochDuration;
-        bytes32[] activeDefiApps;
-        mapping(uint256 => EpochParams) epochs;
-    }
+    using EpochDistributor for EpochDistributorStorage;
 
     /// Events
     event SetDefaultRps(uint256 indexed effectiveEpoch, uint32 rps);
@@ -34,10 +23,19 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     // keccak256(abi.encodePacked("DefiAppHomeCenter"))
     bytes32 private constant DefiAppHomeCenterStorageLocation =
         0x3d408693d2626960862af4d27394da9c222ee4ed12c70a12350875430c40459a;
+    // keccak256(abi.encodePacked("EpochDistributor"))
+    bytes32 private constant EpochDistributorStorageLocation =
+        0x5adc47f138f163cc2f72818e1462074cc075124a849d01a5dd68e6f9e97229bc;
 
     function _getDefiAppHomeCenterStorage() private pure returns (DefiAppHomeCenterStorage storage $) {
         assembly {
             $.slot := DefiAppHomeCenterStorageLocation
+        }
+    }
+
+    function _getEpochDistributorStorage() private pure returns (EpochDistributorStorage storage $) {
+        assembly {
+            $.slot := EpochDistributorStorageLocation
         }
     }
 
@@ -68,6 +66,23 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     }
 
     /// Core functions
+
+    function claim(uint256 epoch, bytes32[] calldata proof) external {
+        EpochDistributorStorage storage $e = _getEpochDistributorStorage();
+        DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
+        // TODO: implement the rest of the function
+        $e.claimLogic($, _msgSender(), epoch, proof);
+    }
+
+    function claimMulti(uint256[] calldata epochs, bytes32[][] calldata proofs) external {
+        DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
+        EpochDistributorStorage storage $e = _getEpochDistributorStorage();
+        // TODO: implement the rest of the function
+        uint256 len = epochs.length;
+        for (uint256 i = 0; i < len; i++) {
+            $e.claimLogic($, _msgSender(), epochs[i], proofs[i]);
+        }
+    }
 
     /// Internal functions
     function _getNextEpoch(DefiAppHomeCenterStorage storage $) internal view returns (uint256) {
