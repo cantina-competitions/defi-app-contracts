@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {StakedLock, Balances} from "../../reference/MultiFeeDistribution/MFDDataTypes.sol";
-import {IFeeDistribution} from "./IFeeDistribution.sol";
+import {StakedLock, Balances, ClaimableReward} from "../../reference/MultiFeeDistribution/MFDDataTypes.sol";
 import {IMintableToken} from "../IMintableToken.sol";
 
-interface IMultiFeeDistribution is IFeeDistribution {
+interface IMultiFeeDistribution {
     function emissionToken() external view returns (address);
 
     function stakeToken() external view returns (address);
@@ -14,25 +13,25 @@ interface IMultiFeeDistribution is IFeeDistribution {
 
     function getUserLocks(address _user) external view returns (StakedLock[] memory);
 
+    function getUserBalances(address _user) external view returns (Balances memory);
+
     function autocompoundDisabled(address _user) external view returns (bool);
 
-    function defaultLockIndex(address _user) external view returns (uint256);
+    function getDefaultLockIndex(address _user) external view returns (uint256);
 
     function autoRelockDisabled(address _user) external view returns (bool);
 
-    function stakedBalance(address _user) external view returns (uint256);
+    function getUserClaimableRewards(address _account) external view returns (ClaimableReward[] memory rewards);
 
-    function getUserBalances(address _user) external view returns (Balances memory);
-
-    function zapEmissionsToStake(address _address) external returns (uint256);
-
-    function claimableRewards(address _account) external view returns (IFeeDistribution.RewardData[] memory rewards);
-
-    function setDefaultRelockTypeIndex(uint256 _index) external;
+    function setDefaultLockIndex(uint256 _index) external;
 
     function userSlippage(address) external view returns (uint256);
 
-    function claimFromConverter(address) external;
+    function addReward(address rewardsToken) external;
+
+    function removeReward(address _rewardToken) external;
+
+    function claimAndCompound(address) external;
 }
 
 interface IMFDPlus is IMultiFeeDistribution {
