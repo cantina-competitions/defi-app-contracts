@@ -1,16 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-struct DefiAppHomeCenterStorage {
-    address homeToken;
-    uint96 currentEpoch;
-    uint8 votingActive;
-    uint32 defaultEpochDuration; // in seconds
-    uint128 defaultRps; // defined as "ratePerSecond": as token units (wei) per second
-    bytes32[] activeDefiApps;
-    mapping(uint256 => EpochParams) epochs;
-}
-
 enum EpochStates {
     Undefined,
     Initialized,
@@ -22,13 +12,48 @@ enum EpochStates {
 
 struct EpochParams {
     uint256 endBlock;
-    uint128 rps;
+    uint128 toBeDistributed;
     uint96 startTimestamp;
     uint8 state;
 }
 
+struct MerkleUserBalInput {
+    bytes32 userId;
+    bytes32 protocolId;
+    uint256 storedBalance;
+    uint256 storedBoost;
+    bytes32 timeSpanId;
+}
+
+struct MerkleUserDistroInput {
+    bytes32 userId;
+    uint256 earnedPoints;
+    uint256 earnedTokens;
+}
+
+struct UserConfig {
+    address stakeHolder;
+    address receiver;
+    uint8 enableClaimOnBehalf;
+}
+
+struct DefiAppHomeCenterStorage {
+    address homeToken;
+    uint96 currentEpoch;
+    address stakingAddress;
+    uint96 empty_1;
+    uint128 defaultRps; // defined as "ratePerSecond": as token units (wei) per second
+    uint32 defaultEpochDuration; // in seconds
+    uint8 votingActive; // boolean if voting is enable for next epoch
+    uint8 mintingActive; // boolean if minting is used for distribution
+    uint80 empty_2;
+    bytes32[] activeDefiApps;
+    mapping(uint256 => EpochParams) epochs;
+}
+
 struct EpochDistributorStorage {
+    mapping(bytes32 => UserConfig) userConfigs;
     mapping(uint256 => bytes32) balanceMerkleRoots; // epoch => user recorded balances merkle root
     mapping(uint256 => bytes32) distributionMerkleRoots; // epoch => user distribution merkle root
-    mapping(uint256 => mapping(address => bool)) isClaimed; // epoch => user => claimed
+    mapping(uint256 => mapping(bytes32 => bool)) isClaimed; // epoch => userId => claimed
 }
