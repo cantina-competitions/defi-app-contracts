@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
 import {IPriceProvider} from "../../interfaces/radiant/IPriceProvider.sol";
-import {MultiFeeDistribution} from "./MultiFeeDistribution.sol";
+import {MFDBase} from "./MFDBase.sol";
 import {StakedLock, Balances, MultiFeeDistributionStorage, Reward} from "./MFDDataTypes.sol";
 
 library MFDLogic {
@@ -86,20 +86,18 @@ library MFDLogic {
                 $.userLocks[_onBehalf][indexToAggregate].amount = userLocks[indexToAggregate].amount + _amount;
             } else {
                 _insertLock($, _onBehalf, newLock, lockIndex, userLocksLength);
-                emit MultiFeeDistribution.LockerAdded(_onBehalf);
+                emit MFDBase.LockerAdded(_onBehalf);
             }
         } else {
             _insertLock($, _onBehalf, newLock, lockIndex, userLocksLength);
-            emit MultiFeeDistribution.LockerAdded(_onBehalf);
+            emit MFDBase.LockerAdded(_onBehalf);
         }
 
         if (!_isRelock) {
             IERC20($.stakeToken).safeTransferFrom(msg.sender, address(this), _amount);
         }
 
-        emit MultiFeeDistribution.Locked(
-            _onBehalf, _amount, $.userBalances[_onBehalf].locked, $.lockTypes[_typeIndex].duration
-        );
+        emit MFDBase.Locked(_onBehalf, _amount, $.userBalances[_onBehalf].locked, $.lockTypes[_typeIndex].duration);
     }
 
     /**
@@ -121,7 +119,7 @@ library MFDLogic {
                 $.rewardData[token].balance = $.rewardData[token].balance - reward;
 
                 IERC20(token).safeTransfer(_user, reward);
-                emit MultiFeeDistribution.RewardPaid(_user, token, reward);
+                emit MFDBase.RewardPaid(_user, token, reward);
             }
             unchecked {
                 i++;
@@ -163,7 +161,7 @@ library MFDLogic {
             stakeLogic($, amount, _address, $.defaultLockIndex[_address], true);
         } else if (_doTransfer) {
             IERC20($.stakeToken).safeTransfer(_address, amount);
-            emit MultiFeeDistribution.Withdrawn(_address, amount, $.userBalances[_address].locked);
+            emit MFDBase.Withdrawn(_address, amount, $.userBalances[_address].locked);
         } else {
             revert MGDLogic_invalidAction();
         }
@@ -314,7 +312,7 @@ library MFDLogic {
         r.balance += _rewardAmt;
 
         uint256 rewardUsdValue = 1; // TODO: Implement method to get USD value of the `_rewardAmt`
-        emit MultiFeeDistribution.RevenueEarned(_rewardToken, _rewardAmt, rewardUsdValue);
+        emit MFDBase.RevenueEarned(_rewardToken, _rewardAmt, rewardUsdValue);
     }
 
     /**
@@ -383,7 +381,7 @@ library MFDLogic {
                 }
             }
             if (locks.length == 0) {
-                emit MultiFeeDistribution.LockerRemoved(_user);
+                emit MFDBase.LockerRemoved(_user);
             }
         }
     }

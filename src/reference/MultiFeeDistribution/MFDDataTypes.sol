@@ -33,7 +33,7 @@ struct ClaimableReward {
     uint256 amount;
 }
 
-struct MultiFeeInitializerParams {
+struct MFDBaseInitializerParams {
     address emissionToken;
     address stakeToken;
     uint256 rewardStreamTime;

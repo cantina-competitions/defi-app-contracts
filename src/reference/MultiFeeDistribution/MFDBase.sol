@@ -15,16 +15,16 @@ import {
     Balances,
     ClaimableReward,
     LockType,
-    MultiFeeInitializerParams,
+    MFDBaseInitializerParams,
     MultiFeeDistributionStorage,
     Reward,
     StakedLock
 } from "./MFDDataTypes.sol";
 import {MFDLogic} from "./MFDLogic.sol";
 
-/// @title Multi Fee Distribution Contract
+/// @title MFDBase Contract
 /// @author security@defi.app
-contract MultiFeeDistribution is
+contract MFDBase is
     IMultiFeeDistribution,
     Initializable,
     PausableUpgradeable,
@@ -77,13 +77,13 @@ contract MultiFeeDistribution is
     error InvalidAction();
 
     /// State Variables
-    bytes32 private constant MultiFeeDistributionStorageLocation =
-    // keccak256(abi.encodePacked("MultiFeeDistribution"))
-     0x3b5a7af972b52eb289523ec10a91ac1f06e8f37a3acd3ab1a1e292feea803551;
+    bytes32 internal constant MFDBaseStorageLocation =
+    // keccak256(abi.encodePacked("MFDBase"))
+     0x2f47fa4eb5eee175485aa4f219bfc60544d0f3710ec14098d87ffb4a799a2b89;
 
-    function _getMultiFeeDistributionStorage() private pure returns (MultiFeeDistributionStorage storage $) {
+    function _getMFDBaseStorage() internal pure returns (MultiFeeDistributionStorage storage $) {
         assembly {
-            $.slot := MultiFeeDistributionStorageLocation
+            $.slot := MFDBaseStorageLocation
         }
     }
 
@@ -91,10 +91,14 @@ contract MultiFeeDistribution is
         _disableInitializers();
     }
 
+    function initialize(MFDBaseInitializerParams calldata initParams) external virtual initializer {
+        _initialize_MFDBase(initParams);
+    }
+
     /**
-     * @dev Initializer
+     * @dev _initialize_MFDBase
      *  First reward MUST be the `emissionToken`
-     * @param initParams MultiFeeInitializerParams
+     * @param initParams MFDBaseInitializerParams
      * - emissionToken address
      * - stakeToken address
      * - rewardStreamTime Duration that rev rewards are streamed over
@@ -103,7 +107,7 @@ contract MultiFeeDistribution is
      * - defaultLockTypeIndex index in `initLockTypes` to be used as default
      * - lockZap contract address
      */
-    function initialize(MultiFeeInitializerParams calldata initParams) public initializer {
+    function _initialize_MFDBase(MFDBaseInitializerParams calldata initParams) internal {
         _checkNoZeroAddress(initParams.emissionToken);
         _checkNoZeroAddress(initParams.stakeToken);
         _checkNoZeroAddress(initParams.lockZap);
@@ -114,7 +118,7 @@ contract MultiFeeDistribution is
         __Ownable_init(_msgSender());
         __Pausable_init();
 
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.emissionToken = initParams.emissionToken;
         $.stakeToken = initParams.stakeToken;
         $.lockZap = initParams.lockZap;
@@ -136,7 +140,7 @@ contract MultiFeeDistribution is
      * @notice Return emission token.
      */
     function emissionToken() external view returns (address) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.emissionToken;
     }
 
@@ -144,7 +148,7 @@ contract MultiFeeDistribution is
      * @notice Return stake token.
      */
     function stakeToken() external view returns (address) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.stakeToken;
     }
 
@@ -152,7 +156,7 @@ contract MultiFeeDistribution is
      * @notice Return eligible lock indexes.
      */
     function getLockTypes() external view returns (LockType[] memory) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.lockTypes;
     }
 
@@ -160,7 +164,7 @@ contract MultiFeeDistribution is
      * @notice Returns total locked staked token.
      */
     function getLockedSupply() external view returns (uint256) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.lockedSupply;
     }
 
@@ -168,7 +172,7 @@ contract MultiFeeDistribution is
      * @notice Returns total locked staked token with multiplier.
      */
     function getLockedSupplyWithMultiplier() external view returns (uint256) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.lockedSupplyWithMultiplier;
     }
 
@@ -176,7 +180,7 @@ contract MultiFeeDistribution is
      * @notice Get all user's locks
      */
     function getUserLocks(address _user) public view returns (StakedLock[] memory) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.userLocks[_user];
     }
 
@@ -188,7 +192,7 @@ contract MultiFeeDistribution is
      * - lockedWithMultiplier // Multiplied locked amount
      */
     function getUserBalances(address _user) public view returns (Balances memory latestUserBalances) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         latestUserBalances.total = $.userBalances[_user].total;
         (uint256 unlocked, uint256 unlockedWithMultiplier) = _getUnlockedBalance(_user);
         latestUserBalances.locked = latestUserBalances.total - unlocked;
@@ -202,7 +206,7 @@ contract MultiFeeDistribution is
      * @return claimable array of rewards
      */
     function getUserClaimableRewards(address _account) public view returns (ClaimableReward[] memory claimable) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         claimable = new ClaimableReward[]($.rewardTokens.length);
 
         uint256 length = $.rewardTokens.length;
@@ -225,7 +229,7 @@ contract MultiFeeDistribution is
      * @notice Returns the default lock index for `_user`.
      */
     function getDefaultLockIndex(address _user) external view returns (uint256) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.defaultLockIndex[_user];
     }
 
@@ -233,7 +237,7 @@ contract MultiFeeDistribution is
      * @notice Returns `_user`s slippage used in `claimAndCompound(...)` method.
      */
     function userSlippage(address _user) external view returns (uint256) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.userSlippage[_user];
     }
 
@@ -241,7 +245,7 @@ contract MultiFeeDistribution is
      * @notice Returns if `_user` is autocompound disabled.
      */
     function autocompoundDisabled(address _user) external view returns (bool) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.autocompoundDisabled[_user];
     }
 
@@ -249,7 +253,7 @@ contract MultiFeeDistribution is
      * @notice Returns if `_user` is autorelock disabled.
      */
     function autoRelockDisabled(address _user) external view returns (bool) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.autoRelockDisabled[_user];
     }
 
@@ -257,7 +261,7 @@ contract MultiFeeDistribution is
      * @notice Returns the reward token addresses being distributed to stakers.
      */
     function getRewardTokens() external view returns (address[] memory) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.rewardTokens;
     }
 
@@ -265,7 +269,7 @@ contract MultiFeeDistribution is
      * @notice Returns the reward data for `_rewardToken`.
      */
     function getRewardData(address _rewardToken) external view returns (Reward memory) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.rewardData[_rewardToken];
     }
 
@@ -279,7 +283,8 @@ contract MultiFeeDistribution is
      * @param _typeIndex lock type index.
      */
     function stake(uint256 _amount, address _onBehalf, uint256 _typeIndex) external whenNotPaused {
-        MFDLogic.stakeLogic(_getMultiFeeDistributionStorage(), _amount, _onBehalf, _typeIndex, false);
+        _beforeStakeHook(_amount, _onBehalf, _typeIndex);
+        MFDLogic.stakeLogic(_getMFDBaseStorage(), _amount, _onBehalf, _typeIndex, false);
     }
 
     /**
@@ -287,7 +292,7 @@ contract MultiFeeDistribution is
      * @param _rewardTokens array of reward tokens
      */
     function claimRewards(address[] memory _rewardTokens) public whenNotPaused {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         MFDLogic.updateReward($, _msgSender());
         MFDLogic.claimRewardsLogic($, _msgSender(), _rewardTokens);
     }
@@ -296,7 +301,7 @@ contract MultiFeeDistribution is
      * @notice Claim all pending staking rewards.
      */
     function claimAllRewards() external {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return claimRewards($.rewardTokens);
     }
 
@@ -305,7 +310,7 @@ contract MultiFeeDistribution is
      * @return withdraw amount
      */
     function withdrawExpiredLocks() external whenNotPaused returns (uint256) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return MFDLogic.handleWithdrawOrRelockLogic($, _msgSender(), false, true, $.userLocks[_msgSender()].length);
     }
 
@@ -316,7 +321,7 @@ contract MultiFeeDistribution is
      * @return issueBaseBounty true if needs to issue base bounty
      */
     function claimBounty(address _user, bool _execute) public whenNotPaused returns (bool issueBaseBounty) {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (_msgSender() != $.bountyManager) revert InsufficientPermission();
         if (getUserBalances(_user).unlocked == 0) {
             return (false);
@@ -338,7 +343,7 @@ contract MultiFeeDistribution is
      * @dev This function is used to track rewards for all users.
      */
     function trackUnseenRewards() public {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         uint256 len = $.rewardTokens.length;
         for (uint256 i; i < len; i++) {
             MFDLogic.trackUnseenReward($, $.rewardTokens[i]);
@@ -352,7 +357,7 @@ contract MultiFeeDistribution is
      * @param _lockIndex of default lock length
      */
     function setDefaultLockIndex(uint256 _lockIndex) external {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (_lockIndex >= $.lockTypes.length) revert InvalidType();
         $.defaultLockIndex[_msgSender()] = _lockIndex;
         emit DefaultLockIndexUpdated(_msgSender(), _lockIndex);
@@ -364,7 +369,7 @@ contract MultiFeeDistribution is
      * @param _slippage the maximum amount of slippage that the user will incur for each compounding trade
      */
     function setAutocompound(bool _enable, uint256 _slippage) external {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (_enable == $.autocompoundDisabled[_msgSender()]) {
             toggleAutocompound();
         }
@@ -375,7 +380,7 @@ contract MultiFeeDistribution is
      * @notice Toggle autocompound option status.
      */
     function toggleAutocompound() public {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         bool newStatus = !$.autocompoundDisabled[_msgSender()];
         $.autocompoundDisabled[_msgSender()] = newStatus;
         emit UserAutocompoundUpdated(_msgSender(), newStatus);
@@ -389,7 +394,7 @@ contract MultiFeeDistribution is
         if (_slippage < MAX_SLIPPAGE || _slippage >= PERCENT_DIVISOR) {
             revert InvalidAmount();
         }
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.userSlippage[_msgSender()] = _slippage;
         emit UserSlippageUpdated(_msgSender(), _slippage);
     }
@@ -399,7 +404,7 @@ contract MultiFeeDistribution is
      * @param status true if auto relock is enabled.
      */
     function setAutoRelock(bool status) external virtual {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.autoRelockDisabled[_msgSender()] = !status;
     }
 
@@ -411,7 +416,7 @@ contract MultiFeeDistribution is
      */
     function addReward(address _rewardToken) external {
         _checkNoZeroAddress(_rewardToken);
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
         if ($.rewardData[_rewardToken].lastUpdateTime != 0) revert AlreadyAdded();
         $.rewardTokens.push(_rewardToken);
@@ -429,7 +434,7 @@ contract MultiFeeDistribution is
      * @param _rewardToken address to be removed
      */
     function removeReward(address _rewardToken) external {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
 
         bool isTokenFound;
@@ -470,7 +475,7 @@ contract MultiFeeDistribution is
      * @dev `_reward` token must be a valid reward token before distribution.
      */
     function distributeAndTrackReward(address _reward, uint256 _amount) external {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
         if (!$.isRewardToken[_reward]) revert InvalidAddress();
         IERC20(_reward).safeTransferFrom(_msgSender(), address(this), _amount);
@@ -483,7 +488,7 @@ contract MultiFeeDistribution is
      * @param _allowed array of bool
      */
     function setRewardDistributors(address[] calldata _distributors, bool[] calldata _allowed) external onlyOwner {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         uint256 len = _distributors.length;
         if (len != _allowed.length) revert InvalidAmount();
         for (uint256 i; i < len;) {
@@ -502,7 +507,7 @@ contract MultiFeeDistribution is
      */
     function setBountyManager(address _bountyManager) external onlyOwner {
         _checkNoZeroAddress(_bountyManager);
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.bountyManager = _bountyManager;
         $.rewardDistributors[_bountyManager] = true;
         emit BountyManagerUpdated(_bountyManager);
@@ -522,7 +527,7 @@ contract MultiFeeDistribution is
      */
     function setRewardCompounder(address _rewardCompounder) external onlyOwner {
         _checkNoZeroAddress(_rewardCompounder);
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.rewardCompounder = _rewardCompounder;
         emit RewardConverterUpdated(_rewardCompounder);
     }
@@ -543,7 +548,7 @@ contract MultiFeeDistribution is
     function setOperationExpenses(address _opsTreasury, uint256 _operationExpenseRatio) external onlyOwner {
         _checkNoZeroAddress(_opsTreasury);
         if (_operationExpenseRatio > PERCENT_DIVISOR) revert InvalidRatio();
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.opsTreasury = _opsTreasury;
         $.operationExpenseRatio = _operationExpenseRatio;
         emit OperationExpensesUpdated(_opsTreasury, _operationExpenseRatio);
@@ -558,7 +563,7 @@ contract MultiFeeDistribution is
      * @param _onBehalf address to claim.
      */
     function claimAndCompound(address _onBehalf) external whenNotPaused {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (_msgSender() != $.rewardCompounder) revert InsufficientPermission();
         MFDLogic.updateReward($, _onBehalf);
         uint256 length = $.rewardTokens.length;
@@ -622,7 +627,7 @@ contract MultiFeeDistribution is
         view
         returns (uint256 unlocked, uint256 unlockedWithMultiplier)
     {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         StakedLock[] storage locks = $.userLocks[_user];
         uint256 len = locks.length;
         for (uint256 i; i < len;) {
@@ -637,7 +642,7 @@ contract MultiFeeDistribution is
     }
 
     function _setLockTypes(LockType[] memory _lockTypes) internal {
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         delete $.lockTypes;
         uint256 len = _lockTypes.length;
         for (uint256 i; i < len;) {
@@ -654,11 +659,13 @@ contract MultiFeeDistribution is
         _checkZeroAmount(_streamTime);
         _checkZeroAmount(_lookback);
         if (_lookback > _streamTime) revert InvalidLookback();
-        MultiFeeDistributionStorage storage $ = _getMultiFeeDistributionStorage();
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.rewardStreamTime = _streamTime;
         $.rewardsLookback = _lookback;
         emit RewardStreamParamsUpdated(_streamTime, _lookback);
     }
+
+    function _beforeStakeHook(uint256 _amount, address _onBehalf, uint256 indexType) internal virtual {}
 
     function _authorizeUpgrade(address) internal view override onlyOwner {}
 }
