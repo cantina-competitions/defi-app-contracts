@@ -5,14 +5,14 @@ import "../../script/foundry/deploy-libraries/_Index.s.sol";
 import {console} from "forge-std/console.sol";
 import {BaseFixture, MockToken} from "../BaseFixture.t.sol";
 import {
-    MultiFeeDistribution,
-    MultiFeeInitializerParams,
+    MFDBase,
+    MFDBaseInitializerParams,
     Balances,
     LockType,
     StakedLock
-} from "../../src/reference/MultiFeeDistribution/MultiFeeDistribution.sol";
+} from "../../src/reference/MultiFeeDistribution/MFDBase.sol";
 
-contract TestUnitMultiFeeDistribution is BaseFixture {
+contract TestMFDBase is BaseFixture {
     uint256 public constant ONE_UNIT = 1 ether;
 
     uint256 public constant ONE_MONTH_TYPE_INDEX = 0;
@@ -27,7 +27,7 @@ contract TestUnitMultiFeeDistribution is BaseFixture {
 
     MockToken public emissionToken;
     MockToken public stakeToken;
-    MultiFeeDistribution public mfd;
+    MFDBase public mfd;
 
     function setUp() public override {
         super.setUp();
@@ -40,7 +40,7 @@ contract TestUnitMultiFeeDistribution is BaseFixture {
         initLockTypes[SIX_MONTH_TYPE_INDEX] = LockType({duration: 180 days, multiplier: SIX_MONTH_MULTIPLIER});
         initLockTypes[TWELVE_MONTH_TYPE_INDEX] = LockType({duration: 360 days, multiplier: TWELVE_MONTH_MULTIPLIER});
 
-        MultiFeeInitializerParams memory params = MultiFeeInitializerParams({
+        MFDBaseInitializerParams memory params = MFDBaseInitializerParams({
             emissionToken: address(emissionToken),
             stakeToken: address(stakeToken),
             rewardStreamTime: 7 days,
@@ -51,7 +51,7 @@ contract TestUnitMultiFeeDistribution is BaseFixture {
         });
 
         vm.startPrank(Admin.addr);
-        mfd = MultiFeeDistributionDeployer.deploy(fs, "MultiFeeDistribution", TESTING_ONLY, false, params);
+        mfd = MFDBaseDeployer.deploy(fs, "MFDBase", TESTING_ONLY, false, params);
         vm.stopPrank();
     }
 
