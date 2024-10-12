@@ -12,18 +12,8 @@ import {
     StakedLock
 } from "../../src/reference/MultiFeeDistribution/MFDBase.sol";
 
-contract TestMFDBase is BaseFixture {
+contract TestUnitMFDBase is BaseFixture {
     uint256 public constant ONE_UNIT = 1 ether;
-
-    uint256 public constant ONE_MONTH_TYPE_INDEX = 0;
-    uint256 public constant THREE_MONTH_TYPE_INDEX = 1;
-    uint256 public constant SIX_MONTH_TYPE_INDEX = 2;
-    uint256 public constant TWELVE_MONTH_TYPE_INDEX = 3;
-
-    uint128 public constant ONE_MONTH_MULTIPLIER = 1;
-    uint128 public constant THREE_MONTH_MULTIPLIER = 3;
-    uint128 public constant SIX_MONTH_MULTIPLIER = 6;
-    uint128 public constant TWELVE_MONTH_MULTIPLIER = 12;
 
     MockToken public emissionToken;
     MockToken public stakeToken;
