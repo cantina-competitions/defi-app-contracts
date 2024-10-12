@@ -11,12 +11,17 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 library EpochDistributor {
     using SafeERC20 for Home;
 
+    /// Constants
+    address private constant _MAGIC_NUMBER = 0x403E403e403e403e403E403E403e403e403E403E;
+
     /// Custom Errors
     error EpochDistributor_invalidBlockRange();
     error EpochDistributor_invalidEpoch();
     error EpochDistributor_epochAlreadyDistributed();
     error EpochDistributor_balanceRootEmpty();
     error EpochDistributor_distributionRootEmpty();
+    error EpochDistributor_invalidBalanceProof();
+    error EpochDistributor_invalidDistroProof();
     error EpochDistributor_insufficientBalanceForDistribution();
 
     /**
@@ -35,33 +40,56 @@ library EpochDistributor {
         return (endBlock - startBlock) * rps * blockCadence;
     }
 
-    function makeUserId(address user, uint256 seed) public view returns (bytes32) {
-        return keccak256(abi.encodePacked(block.timestamp, block.prevrandao, user, seed));
-    }
-
-    function getLeaveUserBalanceMerkleTree(MerkleUserBalInput calldata input) public pure returns (bytes32 leaf) {
+    /**
+     * @notice Generate the merkle leaf for a user balance of type MerkleUserBalInput
+     * @param input MerkleUserBalInput
+     */
+    function getLeaveUserBalanceMerkleTree(MerkleUserBalInput memory input) public pure returns (bytes32 leaf) {
         return keccak256(
             abi.encodePacked(input.userId, input.protocolId, input.storedBalance, input.storedBoost, input.timeSpanId)
         );
     }
 
-    function getLeaveUserDistroMerkleTree(MerkleUserDistroInput calldata input) public pure returns (bytes32 leaf) {
+    /**
+     * @notice Generate the merkle leaf for a user distribution of type MerkleUserDistroInput
+     * @param input MerkleUserDistroInput
+     */
+    function getLeaveUserDistroMerkleTree(MerkleUserDistroInput memory input) public pure returns (bytes32 leaf) {
         return keccak256(abi.encodePacked(input.userId, input.earnedPoints, input.earnedTokens));
     }
 
+    /**
+     * @notice Settle an epoch by setting the merkle roots that will allow users to claim their rewards
+     * @param epoch epoch to settle
+     * @param balanceRoot merkle root of the user balances
+     * @param distributionRoot merkle root of the user distributions
+     * @param balanceProof proof that includes leave of MAGIC_NUMBER for `balanceRoot`
+     * @param distroProof  proof that includes leave of MAGIC_NUMBER for `distributionRoot`
+     */
     function settleEpochLogic(
-        EpochDistributorStorage storage $d,
+        EpochDistributorStorage storage $e,
         DefiAppHomeCenterStorage storage $,
         uint256 epoch,
         bytes32 balanceRoot,
-        bytes32 distributionRoot
+        bytes32 distributionRoot,
+        bytes32[] calldata balanceProof,
+        bytes32[] calldata distroProof
     ) public {
         require(balanceRoot.length > 0, EpochDistributor_balanceRootEmpty());
         require(distributionRoot.length > 0, EpochDistributor_distributionRootEmpty());
+        require(
+            !_verify(balanceProof, balanceRoot, getLeaveUserBalanceMerkleTree(_getVerifierMerkleUserBalInput())),
+            EpochDistributor_invalidBalanceProof()
+        );
+        require(
+            !_verify(distroProof, distributionRoot, getLeaveUserDistroMerkleTree(_getVerifierMerkleUserDistroInput())),
+            EpochDistributor_invalidDistroProof()
+        );
+
         EpochParams storage epochParams = $.epochs[epoch];
         epochParams.state = uint8(EpochStates.Distributed);
-        $d.balanceMerkleRoots[epoch] = balanceRoot;
-        $d.distributionMerkleRoots[epoch] = distributionRoot;
+        $e.balanceMerkleRoots[epoch] = balanceRoot;
+        $e.distributionMerkleRoots[epoch] = distributionRoot;
 
         Home home = Home($.homeToken);
         if ($.mintingActive == 1) {
@@ -73,17 +101,46 @@ library EpochDistributor {
             home.balanceOf(address(this)) >= epochParams.toBeDistributed,
             EpochDistributor_insufficientBalanceForDistribution()
         );
+
         emit DefiAppHomeCenter.EpochFinalized(epoch);
     }
 
     function claimLogic(
-        EpochDistributorStorage storage $d,
+        EpochDistributorStorage storage $e,
         DefiAppHomeCenterStorage storage $,
-        address account,
-        uint256 points,
         uint256 epoch,
+        MerkleUserDistroInput memory distro,
         bytes32[] calldata distroProof
     ) public {
-        // TODO: Implement the claimLogic function
+        require($e.isClaimed[epoch][distro.userId] == false, EpochDistributor_epochAlreadyDistributed());
+        require(
+            !_verify(distroProof, $e.distributionMerkleRoots[epoch], getLeaveUserDistroMerkleTree(distro)),
+            EpochDistributor_invalidDistroProof()
+        );
+        Home($.homeToken).safeTransfer($e.userConfigs[distro.userId].receiver, distro.earnedTokens);
+        $e.isClaimed[epoch][distro.userId] = true;
+        // TODO: include variants that re-stake the tokens
+    }
+
+    function _getVerifierMerkleUserBalInput() private pure returns (MerkleUserBalInput memory) {
+        return MerkleUserBalInput({
+            userId: _MAGIC_NUMBER,
+            protocolId: bytes32(uint256(uint160(_MAGIC_NUMBER))),
+            storedBalance: uint256(uint160(_MAGIC_NUMBER)),
+            storedBoost: uint256(uint160(_MAGIC_NUMBER)),
+            timeSpanId: bytes32(uint256(uint160(_MAGIC_NUMBER)))
+        });
+    }
+
+    function _getVerifierMerkleUserDistroInput() private pure returns (MerkleUserDistroInput memory) {
+        return MerkleUserDistroInput({
+            userId: _MAGIC_NUMBER,
+            earnedPoints: uint256(uint160(_MAGIC_NUMBER)),
+            earnedTokens: uint256(uint160(_MAGIC_NUMBER))
+        });
+    }
+
+    function _verify(bytes32[] calldata proof, bytes32 root, bytes32 leaf) private pure returns (bool) {
+        return MerkleProof.verify(proof, root, leaf);
     }
 }

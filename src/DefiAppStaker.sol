@@ -11,6 +11,9 @@ struct DefiAppStakerStorage {
 /// @title DefiAppStaker Contract
 /// @author security@defi.app
 contract DefiAppStaker is MFDBase {
+    /// Events
+    event HomeCenterSet(address homeCenter);
+
     /// Custom Errors
     error HomeCenterNotSet();
 
@@ -35,13 +38,21 @@ contract DefiAppStaker is MFDBase {
         return _getDefiAppStakerStorage().homeCenter;
     }
 
+    /// Admin Functions
+
+    function setHomeCenter(DefiAppHomeCenter _homeCenter) external onlyOwner {
+        require(address(_homeCenter) != address(0), AddressZero());
+        _getDefiAppStakerStorage().homeCenter = _homeCenter;
+        emit HomeCenterSet(address(_homeCenter));
+    }
+
     /// Hooks
 
     function _beforeStakeHook(uint256 _amount, address _onBehalf, uint256) internal override {
         DefiAppHomeCenter center = getHomeCenter();
         require(address(center) != address(0), HomeCenterNotSet());
         if (_amount > 0 && _onBehalf != address(0) && getUserLocks(_onBehalf).length == 0) {
-            center.registerStaker(_onBehalf, _amount);
+            center.registerStaker(_onBehalf);
         }
     }
 }

@@ -6,6 +6,7 @@ import {
     EpochStates,
     EpochParams,
     EpochDistributorStorage,
+    MerkleUserDistroInput,
     UserConfig
 } from "./libraries/DefiAppDataTypes.sol";
 import {EpochDistributor} from "./libraries/EpochDistributor.sol";
@@ -29,6 +30,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         uint256 indexed epoch, uint256 endBlock, uint96 estimatedStartTimestamp, uint128 estimatedDistribution
     );
     event EpochFinalized(uint256 indexed epoch);
+    event StakerRegistered(address indexed user);
 
     /// Custom Errors
     error DefiAppHomeCenter_zeroAddressInput();
@@ -39,6 +41,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     error DefiAppHomeCenter_invalidEpochDuration();
     error DefiAppHomeCenter_invalidStartTimestamp();
     error DefiAppHomeCenter_invalidEndBlock();
+    error DefiAppHomeCenter_invalidEpoch();
 
     /// Constants
     uint256 public constant BLOCK_CADENCE = 2; // seconds per block
@@ -151,30 +154,34 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         emit SetMintingActive(_mintingActive);
     }
 
-    function registerStaker(address user, uint256 amount) external onlyRole(STAKE_ADDRESS_ROLE) {
-        bytes32 userId = EpochDistributor.makeUserId(user, amount * block.number);
-        // TODO : check userId is not already registered
-        _getEpochDistributorStorage().userConfigs[userId] =
-            UserConfig({stakeHolder: user, receiver: user, enableClaimOnBehalf: 0});
+    function registerStaker(address user) external onlyRole(STAKE_ADDRESS_ROLE) {
+        EpochDistributorStorage storage $e = _getEpochDistributorStorage();
+        UserConfig storage userConfig = $e.userConfigs[user];
+        if (userConfig.receiver == address(0)) {
+            userConfig.receiver = user;
+            emit StakerRegistered(user);
+        }
     }
 
     /// Core functions
 
-    function claim(uint256 epoch, uint256 points, bytes32[] calldata distroProof) external {
+    function claim(uint256 epoch, MerkleUserDistroInput memory distro, bytes32[] calldata distroProof) external {
         EpochDistributorStorage storage $e = _getEpochDistributorStorage();
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
-        // TODO: implement the rest of the function
-        $e.claimLogic($, _msgSender(), epoch, points, distroProof);
+        require(epoch < $.currentEpoch, DefiAppHomeCenter_invalidEpoch());
+        $e.claimLogic($, epoch, distro, distroProof);
     }
 
-    function claimMulti(uint256[] calldata epochs, uint256[] calldata points, bytes32[][] calldata proofs) external {
+    function claimMulti(uint256[] calldata epochs, MerkleUserDistroInput[] memory distros, bytes32[][] calldata proofs)
+        external
+    {
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         EpochDistributorStorage storage $e = _getEpochDistributorStorage();
         // TODO: implement the rest of the function
         uint256 len = epochs.length;
-        require(len == points.length && len == proofs.length, DefiAppHomeCenter_invalidArrayLenghts());
+        require(len == distros.length, DefiAppHomeCenter_invalidArrayLenghts());
         for (uint256 i = 0; i < len; i++) {
-            $e.claimLogic($, _msgSender(), epochs[i], points[i], proofs[i]);
+            $e.claimLogic($, epochs[i], distros[i], proofs[i]);
         }
     }
 
@@ -218,14 +225,19 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         }
     }
 
-    function settleEpoch(uint256 epoch, bytes32 balanceRoot, bytes32 distributioRoot)
-        public
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function settleEpoch(
+        uint256 epoch,
+        bytes32 balanceRoot,
+        bytes32 distributioRoot,
+        bytes32[] calldata balanceVerifierProofs,
+        bytes32[] calldata distributionVerifierProofs
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         EpochStates state = EpochStates(getEpochParams(epoch).state);
         if (state == EpochStates.Finalized) {
-            _getEpochDistributorStorage().settleEpochLogic($, epoch, balanceRoot, distributioRoot);
+            _getEpochDistributorStorage().settleEpochLogic(
+                $, epoch, balanceRoot, distributioRoot, balanceVerifierProofs, distributionVerifierProofs
+            );
         }
     }
 
