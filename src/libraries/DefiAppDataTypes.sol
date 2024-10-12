@@ -18,7 +18,7 @@ struct EpochParams {
 }
 
 struct MerkleUserBalInput {
-    bytes32 userId;
+    address userId;
     bytes32 protocolId;
     uint256 storedBalance;
     uint256 storedBoost;
@@ -26,13 +26,12 @@ struct MerkleUserBalInput {
 }
 
 struct MerkleUserDistroInput {
-    bytes32 userId;
+    address userId;
     uint256 earnedPoints;
     uint256 earnedTokens;
 }
 
 struct UserConfig {
-    address stakeHolder;
     address receiver;
     uint8 enableClaimOnBehalf;
 }
@@ -52,8 +51,8 @@ struct DefiAppHomeCenterStorage {
 }
 
 struct EpochDistributorStorage {
-    mapping(bytes32 => UserConfig) userConfigs;
+    mapping(address => UserConfig) userConfigs;
     mapping(uint256 => bytes32) balanceMerkleRoots; // epoch => user recorded balances merkle root
     mapping(uint256 => bytes32) distributionMerkleRoots; // epoch => user distribution merkle root
-    mapping(uint256 => mapping(bytes32 => bool)) isClaimed; // epoch => userId => claimed
+    mapping(uint256 => mapping(address => bool)) isClaimed; // epoch => userId => claimed
 }
