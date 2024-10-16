@@ -4,5 +4,7 @@ export function buildMerkleTree(
   leaves: Array<string>,
   hashFn: any
 ): MerkleTree {
-  return new MerkleTree(leaves, hashFn);
+  // NOTE: sortPairs is set to true to ensure the same tree is generated similar
+  // to verification process in Openzeppelin's MerkleProof.sol
+  return new MerkleTree(leaves, hashFn, { sortPairs: true });
 }

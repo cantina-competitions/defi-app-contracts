@@ -42,6 +42,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     error DefiAppHomeCenter_invalidStartTimestamp();
     error DefiAppHomeCenter_invalidEndBlock();
     error DefiAppHomeCenter_invalidEpoch();
+    error DefiAppHomeCenter_invalidEpochState();
 
     /// Constants
     uint256 public constant BLOCK_CADENCE = 2; // seconds per block
@@ -252,11 +253,10 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         EpochStates state = EpochStates(getEpochParams(epoch).state);
-        if (state == EpochStates.Finalized) {
-            _getEpochDistributorStorage().settleEpochLogic(
-                $, epoch, balanceRoot, distributioRoot, balanceVerifierProofs, distributionVerifierProofs
-            );
-        }
+        require(state == EpochStates.Finalized, DefiAppHomeCenter_invalidEpochState());
+        _getEpochDistributorStorage().settleEpochLogic(
+            $, epoch, balanceRoot, distributioRoot, balanceVerifierProofs, distributionVerifierProofs
+        );
     }
 
     /// Internal functions

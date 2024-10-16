@@ -8,6 +8,8 @@ import {DefiAppHomeCenter} from "../DefiAppHomeCenter.sol";
 import {Home} from "../token/Home.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {console} from "forge-std/console.sol";
+
 library EpochDistributor {
     using SafeERC20 for Home;
 
@@ -77,11 +79,11 @@ library EpochDistributor {
         require(balanceRoot.length > 0, EpochDistributor_balanceRootEmpty());
         require(distributionRoot.length > 0, EpochDistributor_distributionRootEmpty());
         require(
-            !_verify(balanceProof, balanceRoot, getLeaveUserBalanceMerkleTree(_getVerifierMerkleUserBalInput())),
+            _verify(balanceProof, balanceRoot, getLeaveUserBalanceMerkleTree(_getVerifierMerkleUserBalInput())),
             EpochDistributor_invalidBalanceProof()
         );
         require(
-            !_verify(distroProof, distributionRoot, getLeaveUserDistroMerkleTree(_getVerifierMerkleUserDistroInput())),
+            _verify(distroProof, distributionRoot, getLeaveUserDistroMerkleTree(_getVerifierMerkleUserDistroInput())),
             EpochDistributor_invalidDistroProof()
         );
 

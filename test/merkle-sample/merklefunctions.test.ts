@@ -62,10 +62,12 @@ test("Should check BalanceInput can be converted to MerkleTree and validate proo
   const balancesRootHex = "0x" + balancesRoot.toString("hex");
   const magicLeaf = getBalanceInputLeave(BALANCE_MAGIC_INPUT_LEAF);
   const magicProof = balancesTree.getProof(magicLeaf);
+  const magicProofHex = balancesTree.getHexProof(magicLeaf);
   if (DEBUG) {
     console.log("balancesTree", balancesTree.toString());
     console.log("balancesRootHex", balancesRootHex);
     console.log("magicLeaf", magicLeaf);
+    console.log("magicProof", magicProofHex);
   }
   expect(balancesTree).toBeDefined();
   expect(balancesRootHex).toMatch(/^0x[0-9a-fA-F]{64}$/);
@@ -81,11 +83,14 @@ test("Should check DistroInput can be converted to MerkleTree and validate proof
   const distroRootHex = "0x" + distroRoot.toString("hex");
   const magicLeaf = getDistroInputLeave(DISTRO_MAGIC_INPUT_LEAF);
   const magicProof = distroTree.getProof(magicLeaf);
+  const magicProofHex = distroTree.getHexProof(magicLeaf);
   if (DEBUG) {
     console.log("distroTree", distroTree.toString());
     console.log("distroRootHex", distroRootHex);
     console.log("magicLeaf", magicLeaf);
+    console.log("magicProof", magicProofHex);
   }
+
   expect(distroTree).toBeDefined();
   expect(distroRootHex).toMatch(/^0x[0-9a-fA-F]{64}$/);
   expect(distroTree.verify(magicProof, magicLeaf, distroRoot)).toBe(true);

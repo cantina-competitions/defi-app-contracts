@@ -42,11 +42,6 @@ contract BasicFixture is Test {
         Admin = vm.createWallet("Admin");
         Treasury = vm.createWallet("Treasury");
 
-        console.log("User1 address: %s", User1.addr);
-        console.log("User2 address: %s", User2.addr);
-        console.log("User3 address: %s", User3.addr);
-        console.log("User4 address: %s", User4.addr);
-
         fs = new FileSystem();
     }
 
