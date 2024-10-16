@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "../../script/foundry/deploy-libraries/_Index.s.sol";
 import {console} from "forge-std/console.sol";
-import {BaseFixture, MockToken} from "../BaseFixture.t.sol";
+import {BasicFixture, MockToken} from "../BasicFixture.t.sol";
 import {
     MFDBase,
     MFDBaseInitializerParams,
@@ -12,7 +12,7 @@ import {
     StakedLock
 } from "../../src/reference/MultiFeeDistribution/MFDBase.sol";
 
-contract TestUnitMFDBase is BaseFixture {
+contract TestUnitMFDBase is BasicFixture {
     uint256 public constant ONE_UNIT = 1 ether;
 
     MockToken public emissionToken;

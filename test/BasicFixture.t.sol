@@ -9,7 +9,7 @@ import {MockToken} from "./mocks/MockToken.t.sol";
 import {DefiAppStaker} from "../src/DefiAppStaker.sol";
 import {MFDBaseInitializerParams, LockType} from "../src/reference/MultiFeeDistribution/MFDDataTypes.sol";
 
-contract BaseFixture is Test {
+contract BasicFixture is Test {
     ///////// Constants /////////
     bool public constant TESTING_ONLY = true;
 
@@ -41,6 +41,11 @@ contract BaseFixture is Test {
         User4 = vm.createWallet("User4");
         Admin = vm.createWallet("Admin");
         Treasury = vm.createWallet("Treasury");
+
+        console.log("User1 address: %s", User1.addr);
+        console.log("User2 address: %s", User2.addr);
+        console.log("User3 address: %s", User3.addr);
+        console.log("User4 address: %s", User4.addr);
 
         fs = new FileSystem();
     }

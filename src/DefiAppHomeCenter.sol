@@ -134,7 +134,25 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         return _getDefiAppHomeCenterStorage().mintingActive == 1;
     }
 
-    /// Admin setters
+    /// EpochDistributor view methods
+
+    function getUserConfig(address user) external view returns (UserConfig memory) {
+        return _getEpochDistributorStorage().userConfigs[user];
+    }
+
+    function getBalanceMerkleRoot(uint256 epoch) external view returns (bytes32) {
+        return _getEpochDistributorStorage().balanceMerkleRoots[epoch];
+    }
+
+    function getDistributionMerkleRoot(uint256 epoch) external view returns (bytes32) {
+        return _getEpochDistributorStorage().distributionMerkleRoots[epoch];
+    }
+
+    function isClaimed(uint256 epoch, address user) external view returns (bool) {
+        return _getEpochDistributorStorage().isClaimed[epoch][user];
+    }
+
+    /// Permissioned setters
     function setDefaultRps(uint128 _rps) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setDefaultRps(_rps);
     }
@@ -254,7 +272,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         uint128 estimatedDistribution,
         uint8 state
     ) internal {
-        require(estimatedStartTimestamp > block.timestamp, DefiAppHomeCenter_invalidStartTimestamp());
+        require(estimatedStartTimestamp >= block.timestamp, DefiAppHomeCenter_invalidStartTimestamp());
         require(endBlock > block.number + NEXT_EPOCH_PREFACE, DefiAppHomeCenter_invalidEndBlock());
         $.epochs[epochToIntantiate] = EpochParams({
             endBlock: endBlock,

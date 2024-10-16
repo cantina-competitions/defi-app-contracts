@@ -45,9 +45,8 @@ library EpochDistributor {
      * @param input MerkleUserBalInput
      */
     function getLeaveUserBalanceMerkleTree(MerkleUserBalInput memory input) public pure returns (bytes32 leaf) {
-        return keccak256(
-            abi.encodePacked(input.userId, input.protocolId, input.storedBalance, input.storedBoost, input.timeSpanId)
-        );
+        return
+            keccak256(abi.encodePacked(input.avgBalance, input.boost, input.protocolId, input.timeSpanId, input.userId));
     }
 
     /**
@@ -55,7 +54,7 @@ library EpochDistributor {
      * @param input MerkleUserDistroInput
      */
     function getLeaveUserDistroMerkleTree(MerkleUserDistroInput memory input) public pure returns (bytes32 leaf) {
-        return keccak256(abi.encodePacked(input.userId, input.earnedPoints, input.earnedTokens));
+        return keccak256(abi.encodePacked(input.points, input.tokens, input.userId));
     }
 
     /**
@@ -117,26 +116,26 @@ library EpochDistributor {
             !_verify(distroProof, $e.distributionMerkleRoots[epoch], getLeaveUserDistroMerkleTree(distro)),
             EpochDistributor_invalidDistroProof()
         );
-        Home($.homeToken).safeTransfer($e.userConfigs[distro.userId].receiver, distro.earnedTokens);
+        Home($.homeToken).safeTransfer($e.userConfigs[distro.userId].receiver, distro.tokens);
         $e.isClaimed[epoch][distro.userId] = true;
         // TODO: include variants that re-stake the tokens
     }
 
     function _getVerifierMerkleUserBalInput() private pure returns (MerkleUserBalInput memory) {
         return MerkleUserBalInput({
-            userId: _MAGIC_NUMBER,
+            avgBalance: uint256(uint160(_MAGIC_NUMBER)),
+            boost: uint256(uint160(_MAGIC_NUMBER)),
             protocolId: bytes32(uint256(uint160(_MAGIC_NUMBER))),
-            storedBalance: uint256(uint160(_MAGIC_NUMBER)),
-            storedBoost: uint256(uint160(_MAGIC_NUMBER)),
-            timeSpanId: bytes32(uint256(uint160(_MAGIC_NUMBER)))
+            timeSpanId: bytes32(uint256(uint160(_MAGIC_NUMBER))),
+            userId: _MAGIC_NUMBER
         });
     }
 
     function _getVerifierMerkleUserDistroInput() private pure returns (MerkleUserDistroInput memory) {
         return MerkleUserDistroInput({
-            userId: _MAGIC_NUMBER,
-            earnedPoints: uint256(uint160(_MAGIC_NUMBER)),
-            earnedTokens: uint256(uint160(_MAGIC_NUMBER))
+            points: uint256(uint160(_MAGIC_NUMBER)),
+            tokens: uint256(uint160(_MAGIC_NUMBER)),
+            userId: _MAGIC_NUMBER
         });
     }
 

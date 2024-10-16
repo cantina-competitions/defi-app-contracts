@@ -18,17 +18,17 @@ struct EpochParams {
 }
 
 struct MerkleUserBalInput {
-    address userId;
-    bytes32 protocolId;
-    uint256 storedBalance;
-    uint256 storedBoost;
-    bytes32 timeSpanId;
+    uint256 avgBalance; // Usd value amount expressed in integer one-dollar-units rounded to the nearest
+    uint256 boost; // integer boost factor of `protocolId` in `this` epoch
+    bytes32 protocolId; // unique identifier of the protocol
+    bytes32 timeSpanId; // unique identifier of the time span
+    address userId; // unique identifier of the user
 }
 
 struct MerkleUserDistroInput {
-    address userId;
-    uint256 earnedPoints;
-    uint256 earnedTokens;
+    uint256 points; // earned points expressed as integer rounded to nearest
+    uint256 tokens; // earned tokens expressed in token units (wei or equivalent)
+    address userId; // unique identifier of the user
 }
 
 struct UserConfig {
