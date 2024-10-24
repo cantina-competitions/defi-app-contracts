@@ -4,23 +4,32 @@ pragma solidity ^0.8.27;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IPoolHelper {
+    /// View Functions
+
+    /// @notice Returns the address of the LP token
     function lpTokenAddr() external view returns (address);
 
-    function zapWETH(uint256 amount) external returns (uint256);
+    /// @notice Returns the reserve amounts of the pool
+    function getReserves()
+        external
+        view
+        returns (uint256 pairTokenReserve, uint256 weth9Reserve, uint256 lpTokenSupply);
 
-    function zapTokens(uint256 _wethAmt, uint256 _rdntAmt) external returns (uint256);
+    /// @notice Returns the price of LP token in WETH9
+    /// @param _pairTokenPriceInWeth9 The price of the pair token in WETH9
+    function getLpPrice(uint256 _pairTokenPriceInWeth9) external view returns (uint256 lpPriceInWeth9);
 
-    function quoteFromToken(uint256 tokenAmount) external view returns (uint256 optimalWETHAmount);
+    /// @notice Returns a quote of `pairTokenAmount` in weth9 amount
+    function quoteFromToken(uint256 pairTokenAmount) external view returns (uint256 weth9Amount);
 
-    function quoteWETH(uint256 lpAmount) external view returns (uint256 wethAmount);
+    /// @notice Returns amount of weth9 required to for adding `lpAmount` of lpTokens.
+    function quoteWETH(uint256 lpAmount) external view returns (uint256 weth9Amount);
 
-    function getLpPrice(uint256 rdntPriceInEth) external view returns (uint256 priceInEth);
+    /// Core Functions
 
-    function getReserves() external view returns (uint256 rdnt, uint256 weth, uint256 lpTokenSupply);
+    /// @notice Zaps WETH9 amount into the pool, if weth9 is not the token0 or token1, it will swap it first
+    function zapWETH(uint256 amount) external returns (uint256 lpTokens);
 
-    function getPrice() external view returns (uint256 priceInEth);
-
-    function quoteWethToRdnt(uint256 _wethAmount) external view returns (uint256);
-
-    function swapWethToRdnt(uint256 _wethAmount, uint256 _minAmountOut) external returns (uint256);
+    /// @notice Zaps any amount of pairToken and weth9 into the pool
+    function zapTokens(uint256 pairTokenAmount, uint256 weth9TokenAmount) external returns (uint256 lpTokens);
 }
