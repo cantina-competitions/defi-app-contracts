@@ -163,7 +163,9 @@ contract LockZap is Initializable, OwnableUpgradeable, PausableUpgradeable, Dust
         if (address(_lendingPool) == address(0)) revert AddressZero();
         if (address(_weth) == address(0)) revert AddressZero();
         if (_rdntAddr == address(0)) revert AddressZero();
-        if (_ethLPRatio == 0 || _ethLPRatio >= RATIO_DIVISOR) revert InvalidRatio();
+        if (_ethLPRatio == 0 || _ethLPRatio >= RATIO_DIVISOR) {
+            revert InvalidRatio();
+        }
         if (address(_aaveOracle) == address(0)) revert AddressZero();
 
         __Ownable_init(_msgSender());
@@ -216,7 +218,9 @@ contract LockZap is Initializable, OwnableUpgradeable, PausableUpgradeable, Dust
      * @param _ethLPRatio ratio of ETH in the LP token, (example: can be 2000 for an 80/20 lp)
      */
     function setEthLPRatio(uint256 _ethLPRatio) external onlyOwner {
-        if (_ethLPRatio == 0 || _ethLPRatio >= RATIO_DIVISOR) revert InvalidRatio();
+        if (_ethLPRatio == 0 || _ethLPRatio >= RATIO_DIVISOR) {
+            revert InvalidRatio();
+        }
         ethLPRatio = _ethLPRatio;
         emit EthLPRatioUpdated(_ethLPRatio);
     }
@@ -260,7 +264,9 @@ contract LockZap is Initializable, OwnableUpgradeable, PausableUpgradeable, Dust
      * @param _route Swap route for token
      */
     function setUniV3Route(address _tokenIn, address _tokenOut, bytes memory _route) external onlyOwner {
-        if (_tokenIn == address(0) || _tokenOut == address(0)) revert AddressZero();
+        if (_tokenIn == address(0) || _tokenOut == address(0)) {
+            revert AddressZero();
+        }
         // 43 is the minimum length of a UniswapV3 route with encodePacked.
         // (20 bytes) _tokenIn + (3 bytes) poolFee as uint24 + (20 bytes) _tokenOut
         uint256 routeLength = _route.length;
@@ -406,7 +412,9 @@ contract LockZap is Initializable, OwnableUpgradeable, PausableUpgradeable, Dust
         if (_slippage == 0) {
             _slippage = MAX_SLIPPAGE;
         } else {
-            if (MAX_SLIPPAGE > _slippage || _slippage > RATIO_DIVISOR) revert SpecifiedSlippageExceedLimit();
+            if (MAX_SLIPPAGE > _slippage || _slippage > RATIO_DIVISOR) {
+                revert SpecifiedSlippageExceedLimit();
+            }
         }
         bool isAssetWeth = _asset == address(weth_);
 
@@ -441,7 +449,9 @@ contract LockZap is Initializable, OwnableUpgradeable, PausableUpgradeable, Dust
         weth_.approve(address(poolHelper), _assetAmt);
         //case where rdnt is matched with provided ETH
         if (_rdntAmt != 0) {
-            if (_assetAmt < poolHelper.quoteFromToken(_rdntAmt)) revert InsufficientETH();
+            if (_assetAmt < poolHelper.quoteFromToken(_rdntAmt)) {
+                revert InsufficientETH();
+            }
             // _from == this when zapping from vesting
             if (_from != address(this)) {
                 IERC20(rdntAddr).safeTransferFrom(msg.sender, address(this), _rdntAmt);
@@ -455,7 +465,9 @@ contract LockZap is Initializable, OwnableUpgradeable, PausableUpgradeable, Dust
         }
 
         if (address(priceProvider) != address(0)) {
-            if (_calcSlippage(assetAmountValueUsd, liquidity) < _slippage) revert SlippageTooHigh();
+            if (_calcSlippage(assetAmountValueUsd, liquidity) < _slippage) {
+                revert SlippageTooHigh();
+            }
         }
 
         IERC20(poolHelper.lpTokenAddr()).forceApprove(address(mfd), liquidity);
