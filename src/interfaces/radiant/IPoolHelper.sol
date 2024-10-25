@@ -31,5 +31,5 @@ interface IPoolHelper {
     function zapWETH(uint256 amount) external returns (uint256 lpTokens);
 
     /// @notice Zaps any amount of pairToken and weth9 into the pool
-    function zapTokens(uint256 pairTokenAmount, uint256 weth9TokenAmount) external returns (uint256 lpTokens);
+    function zapTokens(uint256 pairAmt, uint256 weth9Amt) external returns (uint256 lpTokens);
 }
