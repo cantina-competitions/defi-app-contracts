@@ -166,31 +166,6 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
         routeA[0] = IRouter.Route(weth9, pairToken, false, factory);
         IRouter.Route[] memory emptyRouteB = new IRouter.Route[](1);
         lpTokens = router.zapIn(weth9, amount, 0, zapInPool, routeA, emptyRouteB, msg.sender, true);
-
-        // uint256 buyAmount = amount / 2;
-        // if (buyAmount == 0) revert VolatileAMMPoolHelper_amountZero();
-        // _transferFrom(weth9, msg.sender, address(this), amount);
-        // uint256 pairAmount =
-        //     _swapSimple(weth9, buyAmount, _calculateReducedAmount(_quoteSimpleOut(weth9, buyAmount), _getSlippage()));
-
-        // uint256 depositedPair;
-        // uint256 depositedWeth9;
-        // _forceApprove(pairToken, address(router), pairAmount);
-        // _forceApprove(weth9, address(router), buyAmount);
-        // (depositedPair, depositedWeth9, lpTokens) = router.addLiquidity(
-        //     pairToken, weth9, false, pairAmount, buyAmount, pairAmount, 0, address(this), _getDeadline()
-        // );
-
-        // uint256 weth9Dust;
-        // if (depositedPair < pairAmount) {
-        //     weth9Dust += _swapSimple(weth9, pairAmount - depositedPair, 0);
-        // }
-        // if (depositedWeth9 < buyAmount) {
-        //     weth9Dust += buyAmount - depositedWeth9;
-        // }
-        // if (weth9Dust > 0) {
-        //     _transfer(weth9, msg.sender, weth9Dust);
-        // }
     }
 
     function zapTokens(uint256 pairAmt, uint256 weth9Amt) external onlyZapper returns (uint256 lpTokens) {
