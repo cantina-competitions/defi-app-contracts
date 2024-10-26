@@ -43,7 +43,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
     uint256 private constant _FULL_BPS = 10_000;
     uint256 private constant _DEFAULT_SLIPPAGE = 25; // 25bps
 
-    address public immutable pairedToken;
+    address public immutable pairToken;
     address public immutable weth9;
     address public immutable pool;
     address public immutable factory;
@@ -64,7 +64,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
         _checkNoZeroAddress(params.weth9);
         if (params.pairToken == params.weth9) revert VolatileAMMPoolHelper_sameAddress();
 
-        pairedToken = params.pairToken;
+        pairToken = params.pairToken;
         weth9 = params.weth9;
         factory = params.poolFactory;
         router = IRouter(params.routerAddr);
@@ -96,16 +96,16 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
      */
     function getReserves() public view returns (uint256 pairTokenAmt, uint256 weth9Amt, uint256 lpTokenSupply) {
         (uint256 token0Amt, uint256 token1Amt,) = IPool(pool).getReserves();
-        (pairTokenAmt, weth9Amt) = IPool(pool).token0() == pairedToken ? (token0Amt, token1Amt) : (token1Amt, token0Amt);
+        (pairTokenAmt, weth9Amt) = IPool(pool).token0() == pairToken ? (token0Amt, token1Amt) : (token1Amt, token0Amt);
         lpTokenSupply = IERC20(pool).totalSupply();
     }
 
     /**
-     * @notice Returns a quote of `pairedTokenAmount` in weth9 amount
-     * @param pairedTokenAmount The amount of paired token to quote
+     * @notice Returns a quote of `pairTokenAmount` in weth9 amount
+     * @param pairTokenAmount The amount of paired token to quote
      */
-    function quoteFromToken(uint256 pairedTokenAmount) external view returns (uint256 weth9Amount) {
-        return _quoteSimpleOut(pairedToken, pairedTokenAmount);
+    function quoteFromToken(uint256 pairTokenAmount) external view returns (uint256 weth9Amount) {
+        return _quoteSimpleOut(pairToken, pairTokenAmount);
     }
 
     /**
@@ -115,7 +115,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
     function quoteWETH(uint256 lpAmount) external view returns (uint256 wethAmount) {
         (uint256 pairTokenAmt, uint256 weth9Amt, uint256 lpSupply) = getReserves();
         uint256 neededPairToken = (lpAmount * pairTokenAmt) / (lpAmount + lpSupply);
-        uint256 neededRdntInWeth = _quoteSimpleIn(pairedToken, neededPairToken);
+        uint256 neededRdntInWeth = _quoteSimpleIn(pairToken, neededPairToken);
         uint256 neededWeth = ((weth9Amt - neededRdntInWeth) * lpAmount) / lpSupply;
         return neededWeth + neededRdntInWeth;
     }
@@ -159,10 +159,11 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
     function zapWETH(uint256 amount) external onlyZapper returns (uint256 lpTokens) {
         if (amount == 0) revert VolatileAMMPoolHelper_amountZero();
         _transferFrom(weth9, msg.sender, address(this), amount);
-        uint256 pairAmount = _calculateReducedAmount(_quoteSimpleOut(weth9, amount / 2), _getSlippage());
-        IRouter.Zap memory zapInPool = IRouter.Zap(pairedToken, weth9, false, factory, pairAmount, 0, pairAmount, 0);
+        uint256 halfWeth9 = amount / 2;
+        uint256 pairAmount = _calculateReducedAmount(_quoteSimpleOut(weth9, halfWeth9), _getSlippage());
+        IRouter.Zap memory zapInPool = IRouter.Zap(pairToken, weth9, false, factory, pairAmount, 0, pairAmount, 0);
         IRouter.Route[] memory routeA = new IRouter.Route[](1);
-        routeA[0] = IRouter.Route(weth9, pairedToken, false, factory);
+        routeA[0] = IRouter.Route(weth9, pairToken, false, factory);
         IRouter.Route[] memory emptyRouteB = new IRouter.Route[](1);
         lpTokens = router.zapIn(weth9, amount, 0, zapInPool, routeA, emptyRouteB, msg.sender, true);
 
@@ -174,10 +175,10 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
 
         // uint256 depositedPair;
         // uint256 depositedWeth9;
-        // _forceApprove(pairedToken, address(router), pairAmount);
+        // _forceApprove(pairToken, address(router), pairAmount);
         // _forceApprove(weth9, address(router), buyAmount);
         // (depositedPair, depositedWeth9, lpTokens) = router.addLiquidity(
-        //     pairedToken, weth9, false, pairAmount, buyAmount, pairAmount, 0, address(this), _getDeadline()
+        //     pairToken, weth9, false, pairAmount, buyAmount, pairAmount, 0, address(this), _getDeadline()
         // );
 
         // uint256 weth9Dust;
@@ -193,18 +194,38 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
     }
 
     function zapTokens(uint256 pairAmt, uint256 weth9Amt) external onlyZapper returns (uint256 lpTokens) {
-        //     if (pairAmt == 0 && weth9Amt == 0) revert VolatileAMMPoolHelper_amountZero();
-        //     _transferFrom(pairedToken, msg.sender, address(this), pairAmt);
-        //     _transferFrom(weth9, msg.sender, address(this), weth9Amt);
-        //     IRouter.Zap memory zapInPool = IRouter.Zap(pairedToken, weth9, false, factory, pairAmount, 0, pairAmount, 0);
-        //     IRouter.Route[] memory routeA = new IRouter.Route[](1);
-        //     routeA[0] = IRouter.Route(weth9, pairedToken, false, factory);
-        //     IRouter.Route[] memory emptyRouteB = new IRouter.Route[](1);
-        //     lpTokens = router.zapIn(weth9, amount, 0, zapInPool, routeA, emptyRouteB, msg.sender, true);
-    }
+        if (pairAmt == 0 && weth9Amt == 0) revert VolatileAMMPoolHelper_amountZero();
+        _transferFrom(pairToken, msg.sender, address(this), pairAmt);
+        _transferFrom(weth9, msg.sender, address(this), weth9Amt);
 
-    function swapWethToRdnt(uint256 _wethAmount, uint256 _minAmountOut) external returns (uint256) {
-        // TODO
+        IRouter.Route[] memory routeA = new IRouter.Route[](1);
+        routeA[0] = IRouter.Route(pairToken, weth9, false, factory);
+        IRouter.Route[] memory routeB = new IRouter.Route[](1);
+        routeB[0] = IRouter.Route(weth9, pairToken, false, factory);
+
+        // Assign `zapInPool` for pairToken
+        uint256 swapped = _calculateReducedAmount(_quoteSimpleOut(pairToken, pairAmt / 2), _getSlippage());
+        IRouter.Zap memory zapInPool = IRouter.Zap(
+            pairToken, //tokenA
+            weth9, //tokenB
+            false, //isStable
+            factory, //factory
+            0, //amountOutMinA
+            swapped, //amountOutMinB
+            pairAmt, // amountAMin
+            0 // amountBMin
+        );
+        uint256 pairLpTokens = router.zapIn(pairToken, pairAmt, swapped, zapInPool, routeA, routeB, msg.sender, true);
+
+        // Re-assign `zapInPool` for weth9
+        swapped = _calculateReducedAmount(_quoteSimpleOut(weth9, weth9Amt / 2), _getSlippage());
+        zapInPool.amountOutMinA = swapped;
+        zapInPool.amountOutMinB = 0;
+        zapInPool.amountAMin = 0;
+        zapInPool.amountBMin = weth9Amt;
+        uint256 weth9LpTokens = router.zapIn(weth9, weth9Amt, swapped, zapInPool, routeA, routeB, msg.sender, true);
+
+        lpTokens = pairLpTokens + weth9LpTokens;
     }
 
     /// Setter Functions
@@ -225,6 +246,26 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
 
     /// Internal Functions
 
+    function _swapSimple(address tokenIn, uint256 amountIn, uint256 minAmountOut)
+        internal
+        returns (uint256 amountOut)
+    {
+        _transfer(tokenIn, pool, amountIn);
+        IERC20 tokenOut = IERC20(tokenIn == pairToken ? weth9 : pairToken);
+        uint256 tokenOutPreCheck = tokenOut.balanceOf(address(this));
+        (address token0, address token1) = _sortTokens(pairToken, weth9);
+        IPool(pool).swap(
+            tokenIn == token0 ? 0 : _quoteSimpleOut(tokenIn, amountIn),
+            tokenIn == token1 ? 0 : _quoteSimpleOut(tokenIn, amountIn),
+            address(this),
+            new bytes(0)
+        );
+        uint256 tokenOutPostCheck = tokenOut.balanceOf(address(this));
+        uint256 receivedTokenOut = tokenOutPostCheck - tokenOutPreCheck;
+        if (receivedTokenOut < minAmountOut) revert VolatileAMMPoolHelper_swapLessThanExpected();
+        return receivedTokenOut;
+    }
+
     function _transfer(address token, address to, uint256 amount) internal {
         IERC20(token).safeTransfer(to, amount);
     }
@@ -237,17 +278,33 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
         IERC20(token).forceApprove(operator, amount);
     }
 
-    function _getPool(address tokenA, address tokenB) internal view returns (address) {
-        return IPoolFactory(factory).getPool(tokenA, tokenB, false);
+    function _createPool(VolatileAMMPoolHelperInitParams memory params, address caller)
+        internal
+        returns (address newPool)
+    {
+        router.addLiquidity(
+            params.pairToken,
+            params.weth9,
+            false,
+            params.amountPaired,
+            params.amountWeth9,
+            _calculateReducedAmount(params.amountPaired, 100),
+            _calculateReducedAmount(params.amountWeth9, 100),
+            caller,
+            _getDeadline()
+        );
+        newPool = _getPool(params.pairToken, params.weth9);
     }
 
-    function _quoteAddLiquidity(uint256 pairTokenAmt, uint256 weth9Amt)
-        internal
-        view
-        returns (uint256 quotePairTokenIn, uint256 quoteWethIn, uint256 liquidity)
-    {
-        (quotePairTokenIn, quoteWethIn, liquidity) =
-            router.quoteAddLiquidity(pairedToken, weth9, false, factory, pairTokenAmt, weth9Amt);
+    function _refundDust(address token, address refundAddress) internal {
+        uint256 dustAmt = IERC20(token).balanceOf(address(this));
+        if (dustAmt > 0) {
+            _transfer(token, refundAddress, dustAmt);
+        }
+    }
+
+    function _getPool(address tokenA, address tokenB) internal view returns (address) {
+        return IPoolFactory(factory).getPool(tokenA, tokenB, false);
     }
 
     function _quoteSimpleOut(address tokenIn, uint256 amountIn) internal view returns (uint256 amountOut) {
@@ -258,26 +315,6 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
     function _quoteSimpleIn(address tokenOut, uint256 amountOut) internal view returns (uint256 amountIn) {
         uint256 amountInWithOutFee = _getAmountOut(tokenOut, amountOut);
         return amountInWithOutFee + _estimatePoolFee(amountInWithOutFee); // Add fee back to amountIn
-    }
-
-    function _swapSimple(address tokenIn, uint256 amountIn, uint256 minAmountOut)
-        internal
-        returns (uint256 amountOut)
-    {
-        _transfer(tokenIn, pool, amountIn);
-        IERC20 tokenOut = IERC20(tokenIn == pairedToken ? weth9 : pairedToken);
-        uint256 tokenOutPreCheck = tokenOut.balanceOf(address(this));
-        (address token0, address token1) = _sortTokens(pairedToken, weth9);
-        IPool(pool).swap(
-            tokenIn == token0 ? 0 : _quoteSimpleOut(tokenIn, amountIn),
-            tokenIn == token1 ? 0 : _quoteSimpleOut(tokenIn, amountIn),
-            address(this),
-            new bytes(0)
-        );
-        uint256 tokenOutPostCheck = tokenOut.balanceOf(address(this));
-        uint256 receivedTokenOut = tokenOutPostCheck - tokenOutPreCheck;
-        if (receivedTokenOut < minAmountOut) revert VolatileAMMPoolHelper_swapLessThanExpected();
-        return receivedTokenOut;
     }
 
     function _getAmountOut(address tokenIn, uint256 amountIn) internal view returns (uint256) {
@@ -304,24 +341,6 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
 
     function _getSlippage() internal view returns (uint256) {
         return defaultSlippage == 0 ? _DEFAULT_SLIPPAGE : defaultSlippage;
-    }
-
-    function _createPool(VolatileAMMPoolHelperInitParams memory params, address caller)
-        internal
-        returns (address newPool)
-    {
-        router.addLiquidity(
-            params.pairToken,
-            params.weth9,
-            false,
-            params.amountPaired,
-            params.amountWeth9,
-            _calculateReducedAmount(params.amountPaired, 100),
-            _calculateReducedAmount(params.amountWeth9, 100),
-            caller,
-            _getDeadline()
-        );
-        newPool = _getPool(params.pairToken, params.weth9);
     }
 
     function _checkNoZeroAddress(address _address) internal pure {
