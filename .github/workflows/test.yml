@@ -36,10 +36,10 @@ jobs:
 
       - name: Run Forge build
         run: |
-          forge build --sizes
+          forge build --sizes --skip .t.sol .s.sol
         id: build
 
       - name: Run Forge tests
         run: |
-          forge test -vvv
+          forge test --optimize false -vvv
         id: test

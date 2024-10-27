@@ -8,8 +8,6 @@ import {DefiAppHomeCenter} from "../DefiAppHomeCenter.sol";
 import {Home} from "../token/Home.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {console} from "forge-std/console.sol";
-
 library EpochDistributor {
     using SafeERC20 for Home;
 
