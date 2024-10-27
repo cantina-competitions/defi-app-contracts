@@ -6,7 +6,7 @@ import {IPoolHelper} from "../interfaces/radiant/IPoolHelper.sol";
 import {IPoolFactory} from "../interfaces/aerodrome/IPoolFactory.sol";
 import {IPool} from "../interfaces/aerodrome/IPool.sol";
 import {IRouter} from "../interfaces/aerodrome/IRouter.sol";
-import {HomoraMath} from "../reference/libraries/HomoraMath.sol";
+import {HomoraMath} from "../dependencies/libraries/HomoraMath.sol";
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 struct VolatileAMMPoolHelperInitParams {

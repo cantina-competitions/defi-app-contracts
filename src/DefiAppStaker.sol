@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {MFDBase, MFDBaseInitializerParams} from "./reference/MultiFeeDistribution/MFDBase.sol";
+import {MFDBase, MFDBaseInitializerParams} from "./dependencies/MultiFeeDistribution/MFDBase.sol";
 import {DefiAppHomeCenter} from "./DefiAppHomeCenter.sol";
 
 struct DefiAppStakerStorage {

@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {console} from "forge-std/console.sol";
 import {FileSystem} from "../utils/FileSystem.s.sol";
-import {MFDBase, MFDBaseInitializerParams} from "../../../src/reference/MultiFeeDistribution/MFDBase.sol";
+import {MFDBase, MFDBaseInitializerParams} from "../../../src/dependencies/MultiFeeDistribution/MFDBase.sol";
 import {ERC1967ProxyDeployer} from "./ERC1967ProxyDeployer.s.sol";
 
 library MFDBaseDeployer {
