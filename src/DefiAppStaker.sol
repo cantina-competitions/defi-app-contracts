@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {MFDBase, MFDBaseInitializerParams} from "./reference/MultiFeeDistribution/MFDBase.sol";
+import {MFDBase, MFDBaseInitializerParams} from "./dependencies/MultiFeeDistribution/MFDBase.sol";
 import {DefiAppHomeCenter} from "./DefiAppHomeCenter.sol";
 
 struct DefiAppStakerStorage {
@@ -15,7 +15,7 @@ contract DefiAppStaker is MFDBase {
     event HomeCenterSet(address homeCenter);
 
     /// Custom Errors
-    error HomeCenterNotSet();
+    error DefiAppStaker_HomeCenterNotSet();
 
     /// State Variables
     bytes32 private constant DefiAppStakerStorageLocation =
@@ -50,7 +50,7 @@ contract DefiAppStaker is MFDBase {
 
     function _beforeStakeHook(uint256 _amount, address _onBehalf, uint256) internal override {
         DefiAppHomeCenter center = getHomeCenter();
-        require(address(center) != address(0), HomeCenterNotSet());
+        require(address(center) != address(0), DefiAppStaker_HomeCenterNotSet());
         if (_amount > 0 && _onBehalf != address(0) && getUserLocks(_onBehalf).length == 0) {
             center.registerStaker(_onBehalf);
         }

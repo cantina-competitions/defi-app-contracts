@@ -10,7 +10,7 @@ import {
     Balances,
     LockType,
     StakedLock
-} from "../../src/reference/MultiFeeDistribution/MFDBase.sol";
+} from "../../src/dependencies/MultiFeeDistribution/MFDBase.sol";
 
 contract TestUnitMFDBase is BasicFixture {
     uint256 public constant ONE_UNIT = 1 ether;

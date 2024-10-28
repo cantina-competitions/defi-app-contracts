@@ -7,7 +7,7 @@ import {FileSystem} from "../script/foundry/utils/FileSystem.s.sol";
 import {VmSafe} from "forge-std/StdUtils.sol";
 import {MockToken} from "./mocks/MockToken.t.sol";
 import {DefiAppStaker} from "../src/DefiAppStaker.sol";
-import {MFDBaseInitializerParams, LockType} from "../src/reference/MultiFeeDistribution/MFDDataTypes.sol";
+import {MFDBaseInitializerParams, LockType} from "../src/dependencies/MultiFeeDistribution/MFDDataTypes.sol";
 
 contract BasicFixture is Test {
     ///////// Constants /////////
