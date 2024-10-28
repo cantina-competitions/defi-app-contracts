@@ -204,7 +204,6 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         vm.stopPrank();
     }
 
-    /// TODO: this test is failing, need to investigate
     function test_canInitializeNextEpochDuringAppropriateTiming() public {
         bool isInitialized;
         vm.prank(Admin.addr);
