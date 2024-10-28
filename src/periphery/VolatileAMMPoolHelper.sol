@@ -6,6 +6,7 @@ import {IPoolHelper} from "../interfaces/radiant/IPoolHelper.sol";
 import {IPoolFactory} from "../interfaces/aerodrome/IPoolFactory.sol";
 import {IPool} from "../interfaces/aerodrome/IPool.sol";
 import {IRouter} from "../interfaces/aerodrome/IRouter.sol";
+import {DustRefunder} from "../dependencies/helpers/DustRefunder.sol";
 import {HomoraMath} from "../dependencies/libraries/HomoraMath.sol";
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
@@ -19,7 +20,7 @@ struct VolatileAMMPoolHelperInitParams {
     address lockZap;
 }
 
-contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
+contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
     using SafeERC20 for IERC20;
     using HomoraMath for uint256;
 
@@ -158,6 +159,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
 
     function zapWETH(uint256 amount) external onlyZapper returns (uint256 lpTokens) {
         if (amount == 0) revert VolatileAMMPoolHelper_amountZero();
+        uint256 prevWeth9Bal = IERC20(weth9).balanceOf(address(this));
         _transferFrom(weth9, msg.sender, address(this), amount);
         uint256 halfWeth9 = amount / 2;
         uint256 pairAmount = _calculateReducedAmount(_quoteSimpleOut(weth9, halfWeth9), _getSlippage());
@@ -166,10 +168,14 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
         routeA[0] = IRouter.Route(weth9, pairToken, false, factory);
         IRouter.Route[] memory emptyRouteB = new IRouter.Route[](1);
         lpTokens = router.zapIn(weth9, amount, 0, zapInPool, routeA, emptyRouteB, msg.sender, true);
+        _refundDust(weth9, prevWeth9Bal, msg.sender);
     }
 
     function zapTokens(uint256 pairAmt, uint256 weth9Amt) external onlyZapper returns (uint256 lpTokens) {
         if (pairAmt == 0 && weth9Amt == 0) revert VolatileAMMPoolHelper_amountZero();
+        uint256 prevPairTokenBal = IERC20(weth9).balanceOf(address(this));
+        uint256 prevWeth9Bal = IERC20(weth9).balanceOf(address(this));
+
         _transferFrom(pairToken, msg.sender, address(this), pairAmt);
         _transferFrom(weth9, msg.sender, address(this), weth9Amt);
 
@@ -201,6 +207,8 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
         uint256 weth9LpTokens = router.zapIn(weth9, weth9Amt, swapped, zapInPool, routeA, routeB, msg.sender, true);
 
         lpTokens = pairLpTokens + weth9LpTokens;
+        _refundDust(pairToken, prevPairTokenBal, msg.sender);
+        _refundDust(weth9, prevWeth9Bal, msg.sender);
     }
 
     /// Setter Functions
@@ -269,13 +277,6 @@ contract VolatileAMMPoolHelper is IPoolHelper, Ownable2Step {
             _getDeadline()
         );
         newPool = _getPool(params.pairToken, params.weth9);
-    }
-
-    function _refundDust(address token, address refundAddress) internal {
-        uint256 dustAmt = IERC20(token).balanceOf(address(this));
-        if (dustAmt > 0) {
-            _transfer(token, refundAddress, dustAmt);
-        }
     }
 
     function _getPool(address tokenA, address tokenB) internal view returns (address) {
