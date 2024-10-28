@@ -5,7 +5,13 @@ import "../../script/foundry/deploy-libraries/_Index.s.sol";
 import {BasicFixture, MockToken} from "../BasicFixture.t.sol";
 import {console} from "forge-std/console.sol";
 import {DefiAppStaker} from "../../src/DefiAppStaker.sol";
-import {DefiAppHomeCenter, EpochDistributor, EpochParams, EpochStates} from "../../src/DefiAppHomeCenter.sol";
+import {
+    DefiAppHomeCenter,
+    EpochDistributor,
+    EpochParams,
+    EpochStates,
+    MerkleUserDistroInput
+} from "../../src/DefiAppHomeCenter.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract TestUnitDefiAppHomeCenter is BasicFixture {
@@ -24,11 +30,14 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
     /// Merkle roots and proofs for testing
     /// @notice The roots below are obtained from tests and data used in `test/merkle-sample/merklefunctions.test.ts`
     /// To get this values set `const DEBUG = true;` in below and run with:
-    ///  `bun test test/merkle-sample/merklefunctions.test.ts`
+    /// `bun test test/merkle-sample/merklefunctions.test.ts`
     bytes32 public constant BALANCE_INFO_ROOT = 0xcc1138a7a86c3d9bfd34f64b8e57c7de8ed1911392831f8dcd60438c90b491a7;
     bytes32[] public balanceMagicProof;
-    bytes32 public constant DISTRIBUTION_ROOT = 0x6b7d6aec8859e8597879a0de649625d86699539c6b66030cca2f8343797a86da;
+    bytes32 public constant DISTRIBUTION_ROOT = 0x13fdc0b471ab3b57e0ad0cc44d92082dc00db9802b0370b634b1eb3395a07dd3;
     bytes32[] public distributionMagicProof;
+
+    bytes32[] public user1DistroProof;
+    bytes32[] public user2DistroProof;
 
     function setUp() public override {
         super.setUp();
@@ -58,8 +67,14 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         balanceMagicProof[0] = 0x68eff8bdb05c9df1554ae8bc031b7e51904f0e39512d69802abf31f9b8f40f08;
         balanceMagicProof[1] = 0xaf7d40f3762de0f03633aa1a43787eb9d6ed84e94456e546aded7eb641349c0c;
         distributionMagicProof = new bytes32[](2);
-        distributionMagicProof[0] = 0x3e55fc3ca9bf379cfc1eb9830c00c51a3687c002c77b9aa9eacf5a2555903dee;
-        distributionMagicProof[1] = 0x2abb7a8aa2c91f02addae2b8d89585ae94e34f442a4526d526e1a70a3888d74f;
+        distributionMagicProof[0] = 0x8312d52780de7b98b53f615ee6bc0afee9ec61ce8a3186e94467f93f26a9cf31;
+        distributionMagicProof[1] = 0xd88860eaeb04444381638dd77d248ec9f1c6a370e0300c99cce64ce794c33923;
+        user1DistroProof = new bytes32[](2);
+        user1DistroProof[0] = 0xd88860eaeb04444381638dd77d248ec9f1c6a370e0300c99cce64ce794c33923;
+        user1DistroProof[1] = 0x747baafa08aaf243810ebcd7b5cc763efe4e63fb04f8f0a558f593ca09acd724;
+        user2DistroProof = new bytes32[](2);
+        user2DistroProof[0] = 0x1b3aa52159b1afa247fce4722ac38cbd20dfbde045632c7f979c264fba318061;
+        user2DistroProof[1] = 0xe311d0c8e006b1841c71da16149c54a812100d6907d09c63952a6e870fdc1a9c;
     }
 
     function test_defiAppHomeCenterDeploymentState() public view {
@@ -161,6 +176,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         emissionToken.approve(address(center), tokensToDistribute);
         center.settleEpoch(1, BALANCE_INFO_ROOT, DISTRIBUTION_ROOT, balanceMagicProof, distributionMagicProof);
         vm.stopPrank();
+        assertEq(uint8(EpochStates.Distributed), center.getEpochParams(1).state);
     }
 
     function test_cannotSettleEpochNotFinalized() public {
@@ -204,39 +220,90 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         vm.stopPrank();
     }
 
-    /// TODO: this test is failing, need to investigate
     function test_canInitializeNextEpochDuringAppropriateTiming() public {
-        // bool isInitialized;
-        // vm.prank(Admin.addr);
-        // isInitialized = center.initializeNextEpoch();
-        // assertEq(true, isInitialized);
+        bool isInitialized;
+        vm.prank(Admin.addr);
+        isInitialized = center.initializeNextEpoch();
+        assertEq(true, isInitialized);
+        assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(1).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(2).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(3).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(4).state);
 
-        // // Initiate Epoch 2, 1 block before Epoch 1 ends
-        // EpochParams memory params1 = center.getEpochParams(1);
-        // vm.roll(params1.endBlock - 1);
-        // vm.warp(KNOWN_TIMESTAMP + DEFAULT_EPOCH_DURATION - center.BLOCK_CADENCE());
-        // assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(1).state);
-        // isInitialized = center.initializeNextEpoch();
-        // assertEq(true, isInitialized);
-        // assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(1).state);
-        // assertEq(uint8(EpochStates.Initialized), center.getEpochParams(2).state);
+        // Can initiate Epoch 2, 1 block before Epoch 1 ends
+        EpochParams memory params1 = center.getEpochParams(1);
+        vm.roll(params1.endBlock - 1); // one block before
+        vm.warp(KNOWN_TIMESTAMP + DEFAULT_EPOCH_DURATION - center.BLOCK_CADENCE());
+        isInitialized = center.initializeNextEpoch();
+        assertEq(true, isInitialized);
+        assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(1).state);
+        assertEq(uint8(EpochStates.Initialized), center.getEpochParams(2).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(3).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(4).state);
 
-        // // Initiate Epoch 3, 1 block after Epoch 2 ends
-        // EpochParams memory params2 = center.getEpochParams(2);
-        // vm.roll(params2.endBlock + 1);
-        // vm.warp(KNOWN_TIMESTAMP + 2 * DEFAULT_EPOCH_DURATION + center.BLOCK_CADENCE());
-        // assertEq(uint8(EpochStates.Finalized), center.getEpochParams(2).state);
-        // isInitialized = center.initializeNextEpoch();
-        // assertEq(true, isInitialized);
-        // assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(3).state);
+        // Can initiate Epoch 3, 1 block after Epoch 2 ends
+        EpochParams memory params2 = center.getEpochParams(2);
+        vm.roll(params2.endBlock + 1); // one block after
+        vm.warp(KNOWN_TIMESTAMP + 2 * DEFAULT_EPOCH_DURATION + center.BLOCK_CADENCE());
+        isInitialized = center.initializeNextEpoch();
+        assertEq(true, isInitialized);
+        assertEq(uint8(EpochStates.Finalized), center.getEpochParams(1).state);
+        assertEq(uint8(EpochStates.Finalized), center.getEpochParams(2).state);
+        assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(3).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(4).state);
 
-        // Cannot initialize next epoch before before preface
-        // EpochParams memory params3 = center.getEpochParams(3);
-        // uint256 prefaceBlocks = center.NEXT_EPOCH_PREFACE();
-        // vm.roll(params3.endBlock - prefaceBlocks);
-        // vm.warp(KNOWN_TIMESTAMP + 3 * DEFAULT_EPOCH_DURATION - prefaceBlocks * center.BLOCK_CADENCE());
-        // assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(3).state);
-        // isInitialized = center.initializeNextEpoch();
-        // assertEq(false, isInitialized);
+        // CANNOT initialize next epoch before before preface
+        EpochParams memory params3 = center.getEpochParams(3);
+        uint256 prefaceBlocks = center.NEXT_EPOCH_BLOCKS_PREFACE();
+        vm.roll(params3.endBlock - (prefaceBlocks + 1));
+        vm.warp(KNOWN_TIMESTAMP + 3 * DEFAULT_EPOCH_DURATION - prefaceBlocks * center.BLOCK_CADENCE());
+        isInitialized = center.initializeNextEpoch();
+        assertEq(false, isInitialized); // NOTE: should return false
+        assertEq(uint8(EpochStates.Finalized), center.getEpochParams(1).state);
+        assertEq(uint8(EpochStates.Finalized), center.getEpochParams(2).state);
+        assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(3).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(4).state);
+    }
+
+    function test_claimTokensSingleEpoch() public {
+        vm.startPrank(address(staker));
+        center.registerStaker(User1.addr);
+        center.registerStaker(User2.addr);
+        vm.stopPrank();
+
+        vm.prank(Admin.addr);
+        center.initializeNextEpoch();
+
+        vm.roll(center.getEpochParams(1).endBlock + 1);
+        vm.warp(KNOWN_TIMESTAMP + DEFAULT_EPOCH_DURATION + center.BLOCK_CADENCE());
+
+        uint256 tokensToDistribute = center.getEpochParams(1).toBeDistributed;
+        emissionToken.mint(Admin.addr, tokensToDistribute);
+        vm.startPrank(Admin.addr);
+        emissionToken.approve(address(center), tokensToDistribute);
+        center.settleEpoch(1, BALANCE_INFO_ROOT, DISTRIBUTION_ROOT, balanceMagicProof, distributionMagicProof);
+        vm.stopPrank();
+
+        // User1 claims tokens
+        uint256 tokensToReceive = 252878048780487820000000; // from file `test/merkle-sample/distro-inputs.json`
+        MerkleUserDistroInput memory user1DistroInput = MerkleUserDistroInput({
+            points: 10000, // from file `test/merkle-sample/distro-inputs.json`
+            tokens: tokensToReceive,
+            userId: User1.addr // from file `test/merkle-sample/distro-inputs.json`
+        });
+        vm.prank(User1.addr);
+        center.claim(1, user1DistroInput, user1DistroProof);
+        assertEq(emissionToken.balanceOf(User1.addr), tokensToReceive);
+
+        // User2 claims tokens
+        uint256 tokensToReceive2 = 1706926829268292800000000; // from file `test/merkle-sample/distro-inputs.json`
+        MerkleUserDistroInput memory user2DistroInput = MerkleUserDistroInput({
+            points: 67500, // from file `test/merkle-sample/distro-inputs.json`
+            tokens: tokensToReceive2,
+            userId: User2.addr // from file `test/merkle-sample/distro-inputs.json`
+        });
+        vm.prank(User2.addr);
+        center.claim(1, user2DistroInput, user2DistroProof);
+        assertEq(emissionToken.balanceOf(User2.addr), tokensToReceive2);
     }
 }

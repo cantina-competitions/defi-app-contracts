@@ -46,7 +46,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
 
     /// Constants
     uint256 public constant BLOCK_CADENCE = 2; // seconds per block
-    uint256 public constant NEXT_EPOCH_PREFACE = 7 days * BLOCK_CADENCE; // blocks before next epoch can be instantiated
+    uint256 public constant NEXT_EPOCH_BLOCKS_PREFACE = 7 days / BLOCK_CADENCE; // blocks before next epoch can be instantiated
     uint256 public constant PRECISION = 1e18; // precision for rate per second
     bytes32 public constant STAKE_ADDRESS_ROLE = keccak256("STAKE_ADDRESS_ROLE");
 
@@ -187,6 +187,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     function claim(uint256 epoch, MerkleUserDistroInput memory distro, bytes32[] calldata distroProof) external {
         EpochDistributorStorage storage $e = _getEpochDistributorStorage();
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
+        if (_shouldInitializeNextEpoch($)) initializeNextEpoch();
         require(epoch < $.currentEpoch, DefiAppHomeCenter_invalidEpoch());
         $e.claimLogic($, epoch, distro, distroProof);
     }
@@ -221,9 +222,11 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
             );
             return true;
         }
-        if (block.number >= ($.epochs[$.currentEpoch].endBlock - NEXT_EPOCH_PREFACE)) {
-            uint8 stateToSet = $.votingActive == 1 ? uint8(EpochStates.Voting) : uint8(EpochStates.Initialized);
+        if (block.number >= ($.epochs[$.currentEpoch].endBlock - NEXT_EPOCH_BLOCKS_PREFACE)) {
             EpochParams memory previous = $.epochs[$.currentEpoch];
+            uint8 stateToSet = block.number > previous.endBlock
+                ? uint8(EpochStates.Ongoing)
+                : $.votingActive == 1 ? uint8(EpochStates.Voting) : uint8(EpochStates.Initialized);
             $.currentEpoch = _getNextEpoch($);
             uint256 nextEndBlock = previous.endBlock + ($.defaultEpochDuration / BLOCK_CADENCE);
             uint96 nextEstimatedStartTimestamp =
@@ -231,7 +234,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
             _setEpochParams(
                 $,
                 $.currentEpoch,
-                previous.endBlock + ($.defaultEpochDuration / BLOCK_CADENCE),
+                nextEndBlock,
                 nextEstimatedStartTimestamp,
                 EpochDistributor.estimateDistributionAmount(
                     $.defaultRps, previous.endBlock, nextEndBlock, BLOCK_CADENCE
@@ -273,7 +276,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         uint8 state
     ) internal {
         require(estimatedStartTimestamp >= block.timestamp, DefiAppHomeCenter_invalidStartTimestamp());
-        require(endBlock > block.number + NEXT_EPOCH_PREFACE, DefiAppHomeCenter_invalidEndBlock());
+        require(endBlock > block.number + NEXT_EPOCH_BLOCKS_PREFACE, DefiAppHomeCenter_invalidEndBlock());
         $.epochs[epochToIntantiate] = EpochParams({
             endBlock: endBlock,
             startTimestamp: estimatedStartTimestamp,
@@ -281,6 +284,10 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
             state: state
         });
         emit EpochInstantiated(epochToIntantiate, endBlock, estimatedStartTimestamp, estimatedDistribution);
+    }
+
+    function _shouldInitializeNextEpoch(DefiAppHomeCenterStorage storage $) internal view returns (bool) {
+        return block.number >= ($.epochs[$.currentEpoch].endBlock - NEXT_EPOCH_BLOCKS_PREFACE);
     }
 
     function _setDefaultRps(uint128 _rps) internal {
@@ -295,7 +302,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         require(_epochDuration > 0, DefiAppHomeCenter_zeroValueInput());
         require(_epochDuration != $.defaultEpochDuration, DefiAppHomeCenter_noChange());
-        require(_epochDuration > NEXT_EPOCH_PREFACE, DefiAppHomeCenter_invalidEpochDuration());
+        require(_epochDuration > NEXT_EPOCH_BLOCKS_PREFACE, DefiAppHomeCenter_invalidEpochDuration());
         $.defaultEpochDuration = _epochDuration;
         emit SetDefaultEpochDuration(_getNextEpoch($), _epochDuration);
     }
