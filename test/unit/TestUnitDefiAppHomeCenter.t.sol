@@ -206,37 +206,47 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
 
     /// TODO: this test is failing, need to investigate
     function test_canInitializeNextEpochDuringAppropriateTiming() public {
-        // bool isInitialized;
-        // vm.prank(Admin.addr);
-        // isInitialized = center.initializeNextEpoch();
-        // assertEq(true, isInitialized);
+        bool isInitialized;
+        vm.prank(Admin.addr);
+        isInitialized = center.initializeNextEpoch();
+        assertEq(true, isInitialized);
+        assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(1).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(2).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(3).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(4).state);
 
-        // // Initiate Epoch 2, 1 block before Epoch 1 ends
-        // EpochParams memory params1 = center.getEpochParams(1);
-        // vm.roll(params1.endBlock - 1);
-        // vm.warp(KNOWN_TIMESTAMP + DEFAULT_EPOCH_DURATION - center.BLOCK_CADENCE());
-        // assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(1).state);
-        // isInitialized = center.initializeNextEpoch();
-        // assertEq(true, isInitialized);
-        // assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(1).state);
-        // assertEq(uint8(EpochStates.Initialized), center.getEpochParams(2).state);
+        // Can initiate Epoch 2, 1 block before Epoch 1 ends
+        EpochParams memory params1 = center.getEpochParams(1);
+        vm.roll(params1.endBlock - 1); // one block before
+        vm.warp(KNOWN_TIMESTAMP + DEFAULT_EPOCH_DURATION - center.BLOCK_CADENCE());
+        isInitialized = center.initializeNextEpoch();
+        assertEq(true, isInitialized);
+        assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(1).state);
+        assertEq(uint8(EpochStates.Initialized), center.getEpochParams(2).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(3).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(4).state);
 
-        // // Initiate Epoch 3, 1 block after Epoch 2 ends
-        // EpochParams memory params2 = center.getEpochParams(2);
-        // vm.roll(params2.endBlock + 1);
-        // vm.warp(KNOWN_TIMESTAMP + 2 * DEFAULT_EPOCH_DURATION + center.BLOCK_CADENCE());
-        // assertEq(uint8(EpochStates.Finalized), center.getEpochParams(2).state);
-        // isInitialized = center.initializeNextEpoch();
-        // assertEq(true, isInitialized);
-        // assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(3).state);
+        // Can initiate Epoch 3, 1 block after Epoch 2 ends
+        EpochParams memory params2 = center.getEpochParams(2);
+        vm.roll(params2.endBlock + 1); // one block after
+        vm.warp(KNOWN_TIMESTAMP + 2 * DEFAULT_EPOCH_DURATION + center.BLOCK_CADENCE());
+        isInitialized = center.initializeNextEpoch();
+        assertEq(true, isInitialized);
+        assertEq(uint8(EpochStates.Finalized), center.getEpochParams(1).state);
+        assertEq(uint8(EpochStates.Finalized), center.getEpochParams(2).state);
+        assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(3).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(4).state);
 
-        // Cannot initialize next epoch before before preface
-        // EpochParams memory params3 = center.getEpochParams(3);
-        // uint256 prefaceBlocks = center.NEXT_EPOCH_PREFACE();
-        // vm.roll(params3.endBlock - prefaceBlocks);
-        // vm.warp(KNOWN_TIMESTAMP + 3 * DEFAULT_EPOCH_DURATION - prefaceBlocks * center.BLOCK_CADENCE());
-        // assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(3).state);
-        // isInitialized = center.initializeNextEpoch();
-        // assertEq(false, isInitialized);
+        // CANNOT initialize next epoch before before preface
+        EpochParams memory params3 = center.getEpochParams(3);
+        uint256 prefaceBlocks = center.NEXT_EPOCH_BLOCKS_PREFACE();
+        vm.roll(params3.endBlock - (prefaceBlocks + 1));
+        vm.warp(KNOWN_TIMESTAMP + 3 * DEFAULT_EPOCH_DURATION - prefaceBlocks * center.BLOCK_CADENCE());
+        isInitialized = center.initializeNextEpoch();
+        assertEq(false, isInitialized); // NOTE: should return false
+        assertEq(uint8(EpochStates.Finalized), center.getEpochParams(1).state);
+        assertEq(uint8(EpochStates.Finalized), center.getEpochParams(2).state);
+        assertEq(uint8(EpochStates.Ongoing), center.getEpochParams(3).state);
+        assertEq(uint8(EpochStates.Undefined), center.getEpochParams(4).state);
     }
 }
