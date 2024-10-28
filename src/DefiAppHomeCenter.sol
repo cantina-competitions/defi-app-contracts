@@ -187,6 +187,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     function claim(uint256 epoch, MerkleUserDistroInput memory distro, bytes32[] calldata distroProof) external {
         EpochDistributorStorage storage $e = _getEpochDistributorStorage();
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
+        if (_shouldInitializeNextEpoch($)) initializeNextEpoch();
         require(epoch < $.currentEpoch, DefiAppHomeCenter_invalidEpoch());
         $e.claimLogic($, epoch, distro, distroProof);
     }
@@ -283,6 +284,10 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
             state: state
         });
         emit EpochInstantiated(epochToIntantiate, endBlock, estimatedStartTimestamp, estimatedDistribution);
+    }
+
+    function _shouldInitializeNextEpoch(DefiAppHomeCenterStorage storage $) internal view returns (bool) {
+        return block.number >= ($.epochs[$.currentEpoch].endBlock - NEXT_EPOCH_BLOCKS_PREFACE);
     }
 
     function _setDefaultRps(uint128 _rps) internal {
