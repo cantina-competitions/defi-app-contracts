@@ -10,6 +10,7 @@ import {IGauge} from "../interfaces/aerodrome/IGauge.sol";
 import {IVoter} from "../interfaces/aerodrome/IVoter.sol";
 import {DustRefunder} from "../dependencies/helpers/DustRefunder.sol";
 import {HomoraMath} from "../dependencies/libraries/HomoraMath.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 struct VolatileAMMPoolHelperInitParams {
@@ -19,10 +20,9 @@ struct VolatileAMMPoolHelperInitParams {
     uint256 amountWeth9;
     address routerAddr;
     address poolFactory;
-    address lockZap;
 }
 
-contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
+contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Ownable2Step {
     using SafeERC20 for IERC20;
     using HomoraMath for uint256;
 
@@ -36,6 +36,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
     error VolatileAMMPoolHelper_sameAddress();
     error VolatileAMMPoolHelper_weth9PairRequired();
     error VolatileAMMPoolHelper_onlyAllowedZappers();
+    error VolatileAMMPoolHelper_slippageExceedsMaximum();
     error VolatileAMMPoolHelper_noChange();
     error VolatileAMMPoolHelper_quoteFailed();
     error VolatileAMMPoolHelper_swapLessThanExpected();
@@ -44,13 +45,13 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
     uint256 private constant _EIGHT_DECIMALS = 1e8;
     uint256 private constant _BLOCK_INTERVAL = 2 seconds;
     uint256 private constant _FULL_BPS = 10_000;
-    uint256 private constant _DEFAULT_SLIPPAGE = 25; // 25bps
+    uint256 private constant _DEFAULT_SLIPPAGE = 25; // 25 bps
 
-    address public immutable pairToken;
-    address public immutable weth9;
-    address public immutable pool;
-    address public immutable factory;
-    IRouter public immutable router;
+    address public pairToken;
+    address public weth9;
+    address public pool;
+    address public factory;
+    IRouter public router;
 
     uint256 public defaultSlippage;
     mapping(address => bool) public allowedZappers;
@@ -60,7 +61,9 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
         _;
     }
 
-    constructor(VolatileAMMPoolHelperInitParams memory params) Ownable(msg.sender) {
+    constructor() Ownable(msg.sender) {}
+
+    function initialize(VolatileAMMPoolHelperInitParams memory params) external initializer {
         _checkNoZeroAddress(params.routerAddr);
         _checkNoZeroAddress(params.poolFactory);
         _checkNoZeroAddress(params.pairToken);
@@ -78,8 +81,8 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
             require(params.amountPaired > 0 && params.amountWeth9 > 0, VolatileAMMPoolHelper_amountZero());
             _transferFrom(params.pairToken, msg.sender, address(this), params.amountPaired);
             _transferFrom(params.weth9, msg.sender, address(this), params.amountWeth9);
-            _forceApprove(params.pairToken, params.poolFactory, params.amountPaired);
-            _forceApprove(params.weth9, params.poolFactory, params.amountWeth9);
+            _forceApprove(params.pairToken, params.routerAddr, params.amountPaired);
+            _forceApprove(params.weth9, params.routerAddr, params.amountWeth9);
             pool = _createPool(params, msg.sender);
         } else {
             pool = pool_;
@@ -118,9 +121,9 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
     function quoteWETH(uint256 lpAmount) external view returns (uint256 wethAmount) {
         (uint256 pairTokenAmt, uint256 weth9Amt, uint256 lpSupply) = getReserves();
         uint256 neededPairToken = (lpAmount * pairTokenAmt) / (lpAmount + lpSupply);
-        uint256 neededRdntInWeth = _quoteSimpleIn(pairToken, neededPairToken);
-        uint256 neededWeth = ((weth9Amt - neededRdntInWeth) * lpAmount) / lpSupply;
-        return neededWeth + neededRdntInWeth;
+        uint256 neededPairInWeth9 = _quoteSimpleIn(pairToken, neededPairToken);
+        uint256 neededWeth = ((weth9Amt - neededPairInWeth9) * lpAmount) / lpSupply;
+        return neededWeth + neededPairInWeth9;
     }
 
     /**
@@ -162,6 +165,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
     function zapWETH(uint256 amount) external onlyZapper returns (uint256 lpTokens) {
         if (amount == 0) revert VolatileAMMPoolHelper_amountZero();
         _transferFrom(weth9, msg.sender, address(this), amount);
+        _forceApprove(weth9, address(router), amount);
 
         IRouter.Route[] memory routeA = new IRouter.Route[](1);
         routeA[0] = IRouter.Route(weth9, pairToken, false, factory);
@@ -169,7 +173,6 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
         routeB[0] = IRouter.Route(pairToken, weth9, false, factory);
 
         uint256 halfWeth9 = amount / 2;
-        uint256 pairAmount = _calculateReducedAmount(_quoteSimpleOut(weth9, halfWeth9), _getSlippage());
 
         IRouter.Zap memory zapInPool = IRouter.Zap(pairToken, weth9, false, factory, 0, 0, 0, 0);
         (zapInPool.amountOutMinA, zapInPool.amountOutMinB, zapInPool.amountAMin, zapInPool.amountBMin) = router
@@ -178,12 +181,12 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
             zapInPool.tokenB,
             zapInPool.stable,
             zapInPool.factory,
-            pairAmount,
+            halfWeth9,
             halfWeth9,
             routeA,
             routeB
         );
-        lpTokens = router.zapIn(weth9, amount, 0, zapInPool, routeA, routeB, msg.sender, true);
+        lpTokens = router.zapIn(weth9, halfWeth9, halfWeth9, zapInPool, routeA, routeB, msg.sender, true);
 
         _refundDust(pairToken, msg.sender);
         _refundDust(weth9, msg.sender);
@@ -226,6 +229,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
     }
 
     function setDefaultSlippage(uint256 slippage) external onlyOwner {
+        require(slippage <= _FULL_BPS, VolatileAMMPoolHelper_slippageExceedsMaximum());
         if (defaultSlippage == slippage) revert VolatileAMMPoolHelper_noChange();
         defaultSlippage = slippage;
         emit DefaultSlippageSet(slippage);
