@@ -154,8 +154,8 @@ contract MockGauge is IGauge, ERC2771Context, ReentrancyGuard {
         // _updateRewards(_recipient);
 
         IERC20(stakingToken).safeTransferFrom(sender, address(this), _amount);
-        // totalSupply += _amount;
-        // balanceOf[_recipient] += _amount;
+        totalSupply += _amount;
+        balanceOf[_recipient] += _amount;
 
         emit Deposit(sender, _recipient, _amount);
     }
