@@ -6,6 +6,8 @@ import {IPoolHelper} from "../interfaces/radiant/IPoolHelper.sol";
 import {IPoolFactory} from "../interfaces/aerodrome/IPoolFactory.sol";
 import {IPool} from "../interfaces/aerodrome/IPool.sol";
 import {IRouter} from "../interfaces/aerodrome/IRouter.sol";
+import {IGauge} from "../interfaces/aerodrome/IGauge.sol";
+import {IVoter} from "../interfaces/aerodrome/IVoter.sol";
 import {DustRefunder} from "../dependencies/helpers/DustRefunder.sol";
 import {HomoraMath} from "../dependencies/libraries/HomoraMath.sol";
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
@@ -159,56 +161,58 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
 
     function zapWETH(uint256 amount) external onlyZapper returns (uint256 lpTokens) {
         if (amount == 0) revert VolatileAMMPoolHelper_amountZero();
-        uint256 prevWeth9Bal = IERC20(weth9).balanceOf(address(this));
         _transferFrom(weth9, msg.sender, address(this), amount);
-        uint256 halfWeth9 = amount / 2;
-        uint256 pairAmount = _calculateReducedAmount(_quoteSimpleOut(weth9, halfWeth9), _getSlippage());
-        IRouter.Zap memory zapInPool = IRouter.Zap(pairToken, weth9, false, factory, pairAmount, 0, pairAmount, 0);
+
         IRouter.Route[] memory routeA = new IRouter.Route[](1);
         routeA[0] = IRouter.Route(weth9, pairToken, false, factory);
-        IRouter.Route[] memory emptyRouteB = new IRouter.Route[](1);
-        lpTokens = router.zapIn(weth9, amount, 0, zapInPool, routeA, emptyRouteB, msg.sender, true);
-        _refundDust(weth9, prevWeth9Bal, msg.sender);
+        IRouter.Route[] memory routeB = new IRouter.Route[](1);
+        routeB[0] = IRouter.Route(pairToken, weth9, false, factory);
+
+        uint256 halfWeth9 = amount / 2;
+        uint256 pairAmount = _calculateReducedAmount(_quoteSimpleOut(weth9, halfWeth9), _getSlippage());
+
+        IRouter.Zap memory zapInPool = IRouter.Zap(pairToken, weth9, false, factory, 0, 0, 0, 0);
+        (zapInPool.amountOutMinA, zapInPool.amountOutMinB, zapInPool.amountAMin, zapInPool.amountBMin) = router
+            .generateZapInParams(
+            zapInPool.tokenA,
+            zapInPool.tokenB,
+            zapInPool.stable,
+            zapInPool.factory,
+            pairAmount,
+            halfWeth9,
+            routeA,
+            routeB
+        );
+        lpTokens = router.zapIn(weth9, amount, 0, zapInPool, routeA, routeB, msg.sender, true);
+
+        _refundDust(pairToken, msg.sender);
+        _refundDust(weth9, msg.sender);
     }
 
+    /**
+     * @dev This method will match up and `addToLiquidity` up to all pairAmt that can be matched.
+     * It will NOT sell `pairToken` to match with `weth9`.
+     * All unused `weth9` is returned.
+     */
     function zapTokens(uint256 pairAmt, uint256 weth9Amt) external onlyZapper returns (uint256 lpTokens) {
         if (pairAmt == 0 && weth9Amt == 0) revert VolatileAMMPoolHelper_amountZero();
-        uint256 prevPairTokenBal = IERC20(weth9).balanceOf(address(this));
-        uint256 prevWeth9Bal = IERC20(weth9).balanceOf(address(this));
-
         _transferFrom(pairToken, msg.sender, address(this), pairAmt);
         _transferFrom(weth9, msg.sender, address(this), weth9Amt);
 
-        IRouter.Route[] memory routeA = new IRouter.Route[](1);
-        routeA[0] = IRouter.Route(pairToken, weth9, false, factory);
-        IRouter.Route[] memory routeB = new IRouter.Route[](1);
-        routeB[0] = IRouter.Route(weth9, pairToken, false, factory);
-
-        // Assign `zapInPool` for pairToken
-        uint256 swapped = _calculateReducedAmount(_quoteSimpleOut(pairToken, pairAmt / 2), _getSlippage());
-        IRouter.Zap memory zapInPool = IRouter.Zap(
-            pairToken, //tokenA
-            weth9, //tokenB
-            false, //isStable
-            factory, //factory
-            0, //amountOutMinA
-            swapped, //amountOutMinB
-            pairAmt, // amountAMin
-            0 // amountBMin
+        // Match all possible `pairAmt`
+        (uint256 amountA, uint256 amountB,) = router.quoteAddLiquidity(pairToken, weth9, false, factory, pairAmt, 0);
+        (,, lpTokens) = router.addLiquidity(
+            pairToken, weth9, false, pairAmt, amountB, amountA, amountB, address(this), _getDeadline()
         );
-        uint256 pairLpTokens = router.zapIn(pairToken, pairAmt, swapped, zapInPool, routeA, routeB, msg.sender, true);
 
-        // Re-assign `zapInPool` for weth9
-        swapped = _calculateReducedAmount(_quoteSimpleOut(weth9, weth9Amt / 2), _getSlippage());
-        zapInPool.amountOutMinA = swapped;
-        zapInPool.amountOutMinB = 0;
-        zapInPool.amountAMin = 0;
-        zapInPool.amountBMin = weth9Amt;
-        uint256 weth9LpTokens = router.zapIn(weth9, weth9Amt, swapped, zapInPool, routeA, routeB, msg.sender, true);
+        // Stake in Gauge on-behalf zapper
+        address gauge = IVoter(router.voter()).gauges(pool);
+        IERC20(pool).forceApprove(address(gauge), lpTokens);
+        IGauge(gauge).deposit(lpTokens, msg.sender);
+        IERC20(pool).forceApprove(address(gauge), 0);
 
-        lpTokens = pairLpTokens + weth9LpTokens;
-        _refundDust(pairToken, prevPairTokenBal, msg.sender);
-        _refundDust(weth9, prevWeth9Bal, msg.sender);
+        _refundDust(pairToken, msg.sender);
+        _refundDust(weth9, msg.sender);
     }
 
     /// Setter Functions
@@ -271,8 +275,8 @@ contract VolatileAMMPoolHelper is IPoolHelper, DustRefunder, Ownable2Step {
             false,
             params.amountPaired,
             params.amountWeth9,
-            _calculateReducedAmount(params.amountPaired, 100),
-            _calculateReducedAmount(params.amountWeth9, 100),
+            _calculateReducedAmount(params.amountPaired, _DEFAULT_SLIPPAGE),
+            _calculateReducedAmount(params.amountWeth9, _DEFAULT_SLIPPAGE),
             caller,
             _getDeadline()
         );
