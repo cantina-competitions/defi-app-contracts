@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.0;
 
 import {StakedLock, Balances, ClaimableReward} from "../../dependencies/MultiFeeDistribution/MFDDataTypes.sol";
 import {IMintableToken} from "../IMintableToken.sol";
