@@ -200,10 +200,13 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
     function zapTokens(uint256 pairAmt, uint256 weth9Amt) external onlyZapper returns (uint256 lpTokens) {
         if (pairAmt == 0 && weth9Amt == 0) revert VolatileAMMPoolHelper_amountZero();
         _transferFrom(pairToken, msg.sender, address(this), pairAmt);
+        _forceApprove(pairToken, address(router), pairAmt);
         _transferFrom(weth9, msg.sender, address(this), weth9Amt);
+        _forceApprove(weth9, address(router), weth9Amt);
 
         // Match all possible `pairAmt`
-        (uint256 amountA, uint256 amountB,) = router.quoteAddLiquidity(pairToken, weth9, false, factory, pairAmt, 0);
+        (uint256 amountA, uint256 amountB,) =
+            router.quoteAddLiquidity(pairToken, weth9, false, factory, pairAmt, weth9Amt);
         (,, lpTokens) = router.addLiquidity(
             pairToken, weth9, false, pairAmt, amountB, amountA, amountB, address(this), _getDeadline()
         );
