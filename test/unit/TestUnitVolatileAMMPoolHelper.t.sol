@@ -175,11 +175,11 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
 
     function test_vAMMPoolHelperZapWeth() public {
         set_zapper(User1.addr);
+        address pool = vAmmPoolHelper.lpTokenAddr();
+        address gauge = IVoter(router.voter()).gauges(pool);
+        assertEq(IERC20(gauge).balanceOf(User1.addr), 0);
 
         uint256 amount = 1 ether;
-        address pool = vAmmPoolHelper.lpTokenAddr();
-        assertEq(IERC20(pool).balanceOf(User1.addr), 0);
-
         weth9.mint(User1.addr, amount);
 
         vm.startPrank(User1.addr);
@@ -187,9 +187,32 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
         uint256 lpTokens = vAmmPoolHelper.zapWETH(amount);
         vm.stopPrank();
 
-        address gauge = IVoter(router.voter()).gauges(pool);
         uint256 gaugeBalanceOfZapper = IERC20(gauge).balanceOf(User1.addr);
-        assertEq(gaugeBalanceOfZapper > 0, true);
+        assertEq(gaugeBalanceOfZapper, lpTokens);
+    }
+
+    function test_vAMMPoolHelperZapTokens(uint16 rand1, uint16 rand2) public {
+        uint256 pairTokenAmt = bound(rand1, 0.0001 ether, 10000 ether);
+        uint256 weth9Amt = bound(rand2, 0.0001 ether, 10000 ether);
+
+        set_zapper(User1.addr);
+        address pool = vAmmPoolHelper.lpTokenAddr();
+        address gauge = IVoter(router.voter()).gauges(pool);
+        assertEq(IERC20(gauge).balanceOf(User1.addr), 0);
+
+        emissionToken.mint(User1.addr, pairTokenAmt);
+        weth9.mint(User1.addr, weth9Amt);
+
+        assertEq(emissionToken.balanceOf(User1.addr), pairTokenAmt);
+        assertEq(weth9.balanceOf(User1.addr), weth9Amt);
+
+        vm.startPrank(User1.addr);
+        emissionToken.approve(address(vAmmPoolHelper), pairTokenAmt);
+        weth9.approve(address(vAmmPoolHelper), weth9Amt);
+        uint256 lpTokens = vAmmPoolHelper.zapTokens(pairTokenAmt, weth9Amt);
+        vm.stopPrank();
+
+        uint256 gaugeBalanceOfZapper = IERC20(gauge).balanceOf(User1.addr);
         assertEq(gaugeBalanceOfZapper, lpTokens);
     }
 
