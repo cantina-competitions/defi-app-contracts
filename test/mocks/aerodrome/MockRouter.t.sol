@@ -17,7 +17,7 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 
-contract MockAerodromeRouter is IRouter, ERC2771Context {
+contract MockRouter is IRouter, ERC2771Context {
     using SafeERC20 for IERC20;
 
     /// @inheritdoc IRouter

@@ -5,3 +5,4 @@ import {DefiAppHomeCenterDeployer, DefiAppHomeCenterInitParams} from "./DefiAppH
 import {DefiAppStakerDeployer} from "./DefiAppStakerDeployer.s.sol";
 import {ERC1967ProxyDeployer} from "./ERC1967ProxyDeployer.s.sol";
 import {MFDBaseDeployer} from "./MFDBaseDeployer.s.sol";
+import {VolatileAMMPoolHelperDeployer, VolatileAMMPoolHelperInitParams} from "./VolatileAMMPoolHelperDeployer.s.sol";

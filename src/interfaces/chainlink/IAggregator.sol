@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.0;
 
 interface IAggregator {
     event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt);
