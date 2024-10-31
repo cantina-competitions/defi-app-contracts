@@ -116,9 +116,10 @@ library EpochDistributor {
             !_verify(distroProof, $e.distributionMerkleRoots[epoch], getLeaveUserDistroMerkleTree(distro)),
             EpochDistributor_invalidDistroProof()
         );
-        Home($.homeToken).safeTransfer($e.userConfigs[distro.userId].receiver, distro.tokens);
+        address receiver = $e.userConfigs[distro.userId].receiver;
+        Home($.homeToken).safeTransfer(receiver, distro.tokens);
         $e.isClaimed[epoch][distro.userId] = true;
-        // TODO: include variants that re-stake the tokens
+        emit DefiAppHomeCenter.Claimed(epoch, distro.userId, receiver, distro.tokens);
     }
 
     function _getVerifierMerkleUserBalInput() private pure returns (MerkleUserBalInput memory) {
