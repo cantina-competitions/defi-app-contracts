@@ -10,7 +10,8 @@ import {
     EpochDistributor,
     EpochParams,
     EpochStates,
-    MerkleUserDistroInput
+    MerkleUserDistroInput,
+    StakingParams
 } from "../../src/DefiAppHomeCenter.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
@@ -284,6 +285,8 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         center.settleEpoch(1, BALANCE_INFO_ROOT, DISTRIBUTION_ROOT, balanceMagicProof, distributionMagicProof);
         vm.stopPrank();
 
+        StakingParams memory noStaking = StakingParams({weth9ToStake: 0, minLpTokens: 0, typeIndex: 0});
+
         // User1 claims tokens
         uint256 tokensToReceive = 252878048780487820000000; // from file `test/merkle-sample/distro-inputs.json`
         MerkleUserDistroInput memory user1DistroInput = MerkleUserDistroInput({
@@ -292,7 +295,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
             userId: User1.addr // from file `test/merkle-sample/distro-inputs.json`
         });
         vm.prank(User1.addr);
-        center.claim(1, user1DistroInput, user1DistroProof);
+        center.claim(1, user1DistroInput, user1DistroProof, noStaking);
         assertEq(emissionToken.balanceOf(User1.addr), tokensToReceive);
 
         // User2 claims tokens
@@ -303,7 +306,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
             userId: User2.addr // from file `test/merkle-sample/distro-inputs.json`
         });
         vm.prank(User2.addr);
-        center.claim(1, user2DistroInput, user2DistroProof);
+        center.claim(1, user2DistroInput, user2DistroProof, noStaking);
         assertEq(emissionToken.balanceOf(User2.addr), tokensToReceive2);
     }
 }
