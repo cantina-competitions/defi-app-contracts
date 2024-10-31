@@ -39,7 +39,7 @@ library DefiAppHomeCenterDeployer {
                 params.initEpochDuration
             );
             return DefiAppHomeCenter(
-                ERC1967ProxyDeployer.deploy(fs, contractLabel, forTesting, address(instance), initData)
+                payable(ERC1967ProxyDeployer.deploy(fs, contractLabel, forTesting, address(instance), initData))
             );
         }
     }
