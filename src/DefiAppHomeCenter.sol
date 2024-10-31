@@ -7,10 +7,12 @@ import {
     EpochParams,
     EpochDistributorStorage,
     MerkleUserDistroInput,
+    StakingParams,
     UserConfig
 } from "./libraries/DefiAppDataTypes.sol";
 import {EpochDistributor} from "./libraries/EpochDistributor.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {IDefiAppPoolHelper} from "./interfaces/IDefiAppPoolHelper.sol";
 import {IAggregatorV3} from "./interfaces/chainlink/IAggregatorV3.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -26,6 +28,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     event SetDefaultEpochDuration(uint256 indexed effectiveEpoch, uint32 epochDuration);
     event SetVoting(uint256 indexed effectiveEpoch, bool votingActive);
     event SetMintingActive(bool mintingActive);
+    event SetPoolHelper(address poolHelper);
     event EpochInstantiated(
         uint256 indexed epoch, uint256 endBlock, uint96 estimatedStartTimestamp, uint128 estimatedDistribution
     );
@@ -35,13 +38,14 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     /// Custom Errors
     error DefiAppHomeCenter_zeroAddressInput();
     error DefiAppHomeCenter_zeroValueInput();
+    error DefiAppHomeCenter_notWeth9();
     error DefiAppHomeCenter_noChange();
     error DefiAppHomeCenter_invalidArrayLenghts();
     error DefiAppHomeCenter_onlyAdmin();
     error DefiAppHomeCenter_invalidEpochDuration();
     error DefiAppHomeCenter_invalidStartTimestamp();
     error DefiAppHomeCenter_invalidEndBlock();
-    error DefiAppHomeCenter_invalidEpoch();
+    error DefiAppHomeCenter_invalidEpoch(uint256 epoch);
     error DefiAppHomeCenter_invalidEpochState();
 
     /// Constants
@@ -74,14 +78,19 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         _disableInitializers();
     }
 
+    receive() external payable {
+        DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
+        require(msg.sender == IDefiAppPoolHelper($.poolHelper).weth9(), DefiAppHomeCenter_notWeth9());
+    }
+
     function initialize(address _homeToken, address _stakingAddress, uint128 _initRps, uint32 _initEpochDuration)
         public
         initializer
     {
         _setDefaultRps(_initRps);
         _setDefaultEpochDuration(_initEpochDuration);
-        require(_homeToken != address(0), DefiAppHomeCenter_zeroAddressInput());
-        require(_stakingAddress != address(0), DefiAppHomeCenter_zeroAddressInput());
+        _checkZeroAddress(_homeToken);
+        _checkZeroAddress(_stakingAddress);
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         $.homeToken = _homeToken;
         $.stakingAddress = _stakingAddress;
@@ -98,6 +107,11 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     function stakingAddress() external view returns (address) {
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         return $.stakingAddress;
+    }
+
+    function poolHelper() external view returns (address) {
+        DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
+        return $.poolHelper;
     }
 
     function getDefaultRps() external view returns (uint128) {
@@ -184,24 +198,40 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
 
     /// Core functions
 
-    function claim(uint256 epoch, MerkleUserDistroInput memory distro, bytes32[] calldata distroProof) external {
+    function claim(
+        uint256 epoch,
+        MerkleUserDistroInput memory distro,
+        bytes32[] calldata distroProof,
+        StakingParams memory staking
+    ) public payable {
         EpochDistributorStorage storage $e = _getEpochDistributorStorage();
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         if (_shouldInitializeNextEpoch($)) initializeNextEpoch();
-        require(epoch < $.currentEpoch, DefiAppHomeCenter_invalidEpoch());
+        require(epoch < $.currentEpoch, DefiAppHomeCenter_invalidEpoch(epoch));
         $e.claimLogic($, epoch, distro, distroProof);
+        if (staking.weth9ToStake > 0) {
+            // TODO
+        }
     }
 
-    function claimMulti(uint256[] calldata epochs, MerkleUserDistroInput[] memory distros, bytes32[][] calldata proofs)
-        external
-    {
+    function claimMulti(
+        uint256[] calldata epochs,
+        MerkleUserDistroInput[] memory distros,
+        bytes32[][] calldata proofs,
+        StakingParams memory staking
+    ) public payable {
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         EpochDistributorStorage storage $e = _getEpochDistributorStorage();
-        // TODO: implement the rest of the function
         uint256 len = epochs.length;
-        require(len == distros.length, DefiAppHomeCenter_invalidArrayLenghts());
+        require(len == distros.length && len == proofs.length, DefiAppHomeCenter_invalidArrayLenghts());
+        uint256 claimed;
         for (uint256 i = 0; i < len; i++) {
+            require(epochs[i] < $.currentEpoch, DefiAppHomeCenter_invalidEpoch(epochs[i]));
             $e.claimLogic($, epochs[i], distros[i], proofs[i]);
+            claimed += distros[i].tokens;
+        }
+        if (staking.weth9ToStake > 0) {
+            // TODO
         }
     }
 
@@ -305,6 +335,10 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         require(_epochDuration > NEXT_EPOCH_BLOCKS_PREFACE, DefiAppHomeCenter_invalidEpochDuration());
         $.defaultEpochDuration = _epochDuration;
         emit SetDefaultEpochDuration(_getNextEpoch($), _epochDuration);
+    }
+
+    function _checkZeroAddress(address addr) internal pure {
+        require(addr != address(0), DefiAppHomeCenter_zeroAddressInput());
     }
 
     function _authorizeUpgrade(address) internal view override onlyRole(DEFAULT_ADMIN_ROLE) {}

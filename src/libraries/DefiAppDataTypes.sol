@@ -36,11 +36,18 @@ struct UserConfig {
     uint8 enableClaimOnBehalf;
 }
 
+struct StakingParams {
+    uint256 weth9ToStake; // amount of WETH9 to stake
+    uint256 minLpTokens; // minimum amount of LP tokens to receive
+    uint256 typeIndex; // See `MFDBase.getLockTypes()`
+}
+
 struct DefiAppHomeCenterStorage {
     address homeToken;
     uint96 currentEpoch;
     address stakingAddress;
     uint96 empty_1;
+    address poolHelper;
     uint128 defaultRps; // defined as "ratePerSecond": as token units (wei) per second
     uint32 defaultEpochDuration; // in seconds
     uint8 votingActive; // boolean if voting is enable for next epoch

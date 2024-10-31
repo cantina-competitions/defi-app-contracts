@@ -115,6 +115,14 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
     }
 
     /**
+     * @notice Returns a quote of `weth9Amount` to pairToken amount
+     * @param weth9Amount The amount of WETH9 to quote
+     */
+    function quoteFromWETH9(uint256 weth9Amount) external view returns (uint256 pairtTokenAmount) {
+        return _quoteSimpleOut(weth9, weth9Amount);
+    }
+
+    /**
      * @notice Returns amount of weth9 required to get `lpAmount` of lpTokens.
      * @param lpAmount The amount of LP tokens to quote
      */
@@ -126,12 +134,13 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
         return neededWeth + neededPairInWeth9;
     }
 
-    /**
-     * @notice Returns a quote of WETH9 amount to pairToken
-     * @param weth9Amount The amount of WETH9 to quote
-     */
-    function quoteWethToPairToken(uint256 weth9Amount) external view returns (uint256) {
-        return _quoteSimpleOut(weth9, weth9Amount);
+    function quoteAddLiquidity(uint256 pairTokenAmt, uint256 weth9Amt)
+        external
+        view
+        returns (uint256 pairTokenIn, uint256 weth9In, uint256 lpTokens)
+    {
+        (pairTokenIn, weth9In, lpTokens) =
+            router.quoteAddLiquidity(pairToken, weth9, false, factory, pairTokenAmt, weth9Amt);
     }
 
     /**
@@ -186,7 +195,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
             routeA,
             routeB
         );
-        lpTokens = router.zapIn(weth9, halfWeth9, halfWeth9, zapInPool, routeA, routeB, msg.sender, true);
+        lpTokens = router.zapIn(weth9, halfWeth9, halfWeth9, zapInPool, routeA, routeB, msg.sender, false);
 
         _refundDust(pairToken, msg.sender);
         _refundDust(weth9, msg.sender);
@@ -210,12 +219,6 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
         (,, lpTokens) = router.addLiquidity(
             pairToken, weth9, false, pairAmt, amountB, amountA, amountB, address(this), _getDeadline()
         );
-
-        // Stake in Gauge on-behalf zapper
-        address gauge = IVoter(router.voter()).gauges(pool);
-        IERC20(pool).forceApprove(address(gauge), lpTokens);
-        IGauge(gauge).deposit(lpTokens, msg.sender);
-        IERC20(pool).forceApprove(address(gauge), 0);
 
         _refundDust(pairToken, msg.sender);
         _refundDust(weth9, msg.sender);

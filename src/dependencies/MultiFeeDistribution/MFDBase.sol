@@ -285,6 +285,7 @@ contract MFDBase is
     function stake(uint256 _amount, address _onBehalf, uint256 _typeIndex) external whenNotPaused {
         _beforeStakeHook(_amount, _onBehalf, _typeIndex);
         MFDLogic.stakeLogic(_getMFDBaseStorage(), _amount, _onBehalf, _typeIndex, false);
+        _afterStakeHook(_amount, _onBehalf, _typeIndex);
     }
 
     /**
@@ -310,6 +311,9 @@ contract MFDBase is
      * @return withdraw amount
      */
     function withdrawExpiredLocks() external whenNotPaused returns (uint256) {
+        uint256 unlocked = getUserBalances(_msgSender()).unlocked;
+        if (unlocked == 0) revert AmountZero();
+        _beforeWithdrawExpiredLocks(unlocked, _msgSender());
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return MFDLogic.handleWithdrawOrRelockLogic($, _msgSender(), false, true, $.userLocks[_msgSender()].length);
     }
@@ -323,7 +327,8 @@ contract MFDBase is
     function claimBounty(address _user, bool _execute) public whenNotPaused returns (bool issueBaseBounty) {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (_msgSender() != $.bountyManager) revert InsufficientPermission();
-        if (getUserBalances(_user).unlocked == 0) {
+        uint256 unlocked = getUserBalances(_user).unlocked;
+        if (unlocked == 0) {
             return (false);
         } else {
             issueBaseBounty = true;
@@ -335,6 +340,7 @@ contract MFDBase is
         trackUnseenRewards();
 
         // Withdraw the user's expried locks
+        _beforeWithdrawExpiredLocks(unlocked, _user);
         MFDLogic.handleWithdrawOrRelockLogic($, _user, false, true, $.userLocks[_user].length);
     }
 
@@ -415,18 +421,9 @@ contract MFDBase is
      * @param _rewardToken address
      */
     function addReward(address _rewardToken) external {
-        _checkNoZeroAddress(_rewardToken);
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
-        if ($.rewardData[_rewardToken].lastUpdateTime != 0) revert AlreadyAdded();
-        $.rewardTokens.push(_rewardToken);
-
-        Reward storage rd = $.rewardData[_rewardToken];
-        rd.lastUpdateTime = block.timestamp;
-        rd.periodFinish = block.timestamp;
-
-        $.isRewardToken[_rewardToken] = true;
-        emit RewardUpdated(_rewardToken, true);
+        _addReward($, _rewardToken);
     }
 
     /**
@@ -614,14 +611,6 @@ contract MFDBase is
 
     /// Internal functions
 
-    function _checkNoZeroAddress(address _address) internal pure {
-        if (_address == address(0)) revert AddressZero();
-    }
-
-    function _checkZeroAmount(uint256 _amount) internal pure {
-        if (_amount == 0) revert AmountZero();
-    }
-
     function _getUnlockedBalance(address _user)
         internal
         view
@@ -639,6 +628,53 @@ contract MFDBase is
                 i++;
             }
         }
+    }
+
+    function _addReward(MultiFeeDistributionStorage storage $, address _rewardToken) internal {
+        _checkNoZeroAddress(_rewardToken);
+        if ($.rewardData[_rewardToken].lastUpdateTime != 0) revert AlreadyAdded();
+        $.rewardTokens.push(_rewardToken);
+
+        Reward storage rd = $.rewardData[_rewardToken];
+        rd.lastUpdateTime = block.timestamp;
+        rd.periodFinish = block.timestamp;
+
+        $.isRewardToken[_rewardToken] = true;
+        emit RewardUpdated(_rewardToken, true);
+    }
+
+    function _removeReward(MultiFeeDistributionStorage storage $, address _rewardToken) internal {
+        bool isTokenFound;
+        uint256 indexToRemove;
+
+        uint256 length = $.rewardTokens.length;
+        for (uint256 i; i < length; i++) {
+            if ($.rewardTokens[i] == _rewardToken) {
+                isTokenFound = true;
+                indexToRemove = i;
+                break;
+            }
+        }
+
+        if (!isTokenFound) revert InvalidAddress();
+
+        // Reward token order is changed, but that doesn't have an impact
+        if (indexToRemove < length - 1) {
+            $.rewardTokens[indexToRemove] = $.rewardTokens[length - 1];
+        }
+
+        $.rewardTokens.pop();
+
+        // Scrub historical reward token data
+        Reward storage rd = $.rewardData[_rewardToken];
+        rd.lastUpdateTime = 0;
+        rd.periodFinish = 0;
+        rd.balance = 0;
+        rd.rewardPerSecond = 0;
+        rd.rewardPerTokenStored = 0;
+
+        $.isRewardToken[_rewardToken] = false;
+        emit RewardUpdated(_rewardToken, false);
     }
 
     function _setLockTypes(LockType[] memory _lockTypes) internal {
@@ -665,7 +701,19 @@ contract MFDBase is
         emit RewardStreamParamsUpdated(_streamTime, _lookback);
     }
 
+    function _checkNoZeroAddress(address _address) internal pure {
+        if (_address == address(0)) revert AddressZero();
+    }
+
+    function _checkZeroAmount(uint256 _amount) internal pure {
+        if (_amount == 0) revert AmountZero();
+    }
+
     function _beforeStakeHook(uint256 _amount, address _onBehalf, uint256 indexType) internal virtual {}
+
+    function _afterStakeHook(uint256 _amount, address _onBehalf, uint256 indexType) internal virtual {}
+
+    function _beforeWithdrawExpiredLocks(uint256 _amount, address _onBehalf) internal virtual {}
 
     function _authorizeUpgrade(address) internal view override onlyOwner {}
 }
