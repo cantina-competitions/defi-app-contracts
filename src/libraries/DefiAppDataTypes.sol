@@ -38,7 +38,7 @@ struct UserConfig {
 
 struct StakingParams {
     uint256 weth9ToStake; // amount of WETH9 to stake
-    uint256 minLpTokens; // minimum amount of LP tokens to receive
+    uint256 minLpTokens; // slippage control: minimum amount of LP tokens to receive
     uint256 typeIndex; // See `MFDBase.getLockTypes()`
 }
 
