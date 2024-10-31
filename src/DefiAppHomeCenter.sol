@@ -11,6 +11,7 @@ import {
     UserConfig
 } from "./libraries/DefiAppDataTypes.sol";
 import {EpochDistributor} from "./libraries/EpochDistributor.sol";
+import {StakeHelper} from "./libraries/StakeHelper.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IDefiAppPoolHelper} from "./interfaces/IDefiAppPoolHelper.sol";
 import {IAggregatorV3} from "./interfaces/chainlink/IAggregatorV3.sol";
@@ -34,6 +35,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     );
     event EpochFinalized(uint256 indexed epoch);
     event StakerRegistered(address indexed user);
+    event Claimed(uint256 indexed epoch, address indexed owner, address indexed receiver, uint256 tokens);
 
     /// Custom Errors
     error DefiAppHomeCenter_zeroAddressInput();
@@ -210,7 +212,8 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         require(epoch < $.currentEpoch, DefiAppHomeCenter_invalidEpoch(epoch));
         $e.claimLogic($, epoch, distro, distroProof);
         if (staking.weth9ToStake > 0) {
-            // TODO
+            // Checks done in stakeClaimedLogic
+            StakeHelper.stakeClaimedLogic($, msg.sender, distro.tokens, staking);
         }
     }
 
@@ -231,7 +234,8 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
             claimed += distros[i].tokens;
         }
         if (staking.weth9ToStake > 0) {
-            // TODO
+            // Checks done in stakeClaimedLogic
+            StakeHelper.stakeClaimedLogic($, msg.sender, claimed, staking);
         }
     }
 
