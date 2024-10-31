@@ -216,9 +216,8 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
         // Match all possible `pairAmt`
         (uint256 amountA, uint256 amountB,) =
             router.quoteAddLiquidity(pairToken, weth9, false, factory, pairAmt, weth9Amt);
-        (,, lpTokens) = router.addLiquidity(
-            pairToken, weth9, false, pairAmt, amountB, amountA, amountB, address(this), _getDeadline()
-        );
+        (,, lpTokens) =
+            router.addLiquidity(pairToken, weth9, false, pairAmt, amountB, amountA, amountB, msg.sender, _getDeadline());
 
         _refundDust(pairToken, msg.sender);
         _refundDust(weth9, msg.sender);
