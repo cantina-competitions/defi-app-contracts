@@ -12,24 +12,42 @@ library StakeHelper {
 
     /// Custom Errors
     error StakeHelper_msgValueMismatch();
+    error StakeHelper_notEnoughLpTokensReceived();
     error StakeHelper_insufficientWeth9();
     error StakeHelper_safeTransferETHFailed();
 
-    function stakeClaimedLogic(DefiAppHomeCenterStorage storage $, uint256 claimed, StakingParams memory params)
-        public
-    {
+    function stakeClaimedLogic(
+        DefiAppHomeCenterStorage storage $,
+        address caller,
+        uint256 claimed,
+        StakingParams memory staking
+    ) public {
         // Handle msg.value cases
         if (msg.value == 0) {
             IERC20(IDefiAppPoolHelper($.poolHelper).weth9()).safeTransferFrom(
-                msg.sender, address(this), params.weth9ToStake
+                caller, address(this), staking.weth9ToStake
             );
-        } else if (msg.value == params.weth9ToStake) {
+        } else if (msg.value == staking.weth9ToStake) {
             _wrapWETH9(IDefiAppPoolHelper($.poolHelper).weth9(), msg.value);
         } else {
             revert StakeHelper_msgValueMismatch();
         }
 
-        IPoolHelper($.poolHelper).zapTokens(claimed, params.weth9ToStake);
+        // Zap the claimed tokens paired with the WETH9 into the pool
+        uint256 received = IPoolHelper($.poolHelper).zapTokens(claimed, staking.weth9ToStake);
+        IERC20 lpToken = IERC20(IDefiAppPoolHelper($.poolHelper).lpTokenAddr());
+
+        // Check for bad slippage or manipulation
+        _checkLpTokensReceived(lpToken, received, staking.minLpTokens);
+
+        // Stake the LP tokens
+        lpToken.forceApprove($.stakingAddress, received);
+        MFDBase($.stakingAddress).stake(received, caller, staking.typeIndex);
+    }
+
+    function _checkLpTokensReceived(IERC20 lpToken, uint256 received, uint256 expected) private view {
+        uint256 readLpTokenBal = lpToken.balanceOf(address(this));
+        require(readLpTokenBal >= received && received > expected, StakeHelper_notEnoughLpTokensReceived());
     }
 
     function _wrapWETH9(address weth9, uint256 amount) private {
