@@ -129,26 +129,24 @@ library MFDLogic {
     /**
      * @notice Withdraw all expired locks for `_address`.
      * @param $ MultiFeeDistributionStorage storage struct.
-     * @param _address of the user.
+     * @param _user address
      * @param _isRelock true if withdraw with relock
-     * @param _doTransfer true to transfer tokens to user
      * @param _limit limit for looping operation
      * @return amount for withdraw
      * //
      */
     function handleWithdrawOrRelockLogic(
         MultiFeeDistributionStorage storage $,
-        address _address,
+        address _user,
         bool _isRelock,
-        bool _doTransfer,
         uint256 _limit
     ) external returns (uint256 amount) {
-        if (_isRelock && _address != msg.sender && $.lockZap != msg.sender) revert MGDLogic_insufficientPermission();
-        updateReward($, _address);
+        if (_isRelock && msg.sender != _user && msg.sender != $.bountyManager) revert MGDLogic_insufficientPermission();
+        updateReward($, _user);
 
         uint256 amountWithMultiplier;
-        Balances storage bal = $.userBalances[_address];
-        (amount, amountWithMultiplier) = _cleanWithdrawableLocks($, _address, _limit);
+        Balances storage bal = $.userBalances[_user];
+        (amount, amountWithMultiplier) = _cleanWithdrawableLocks($, _user, _limit);
         if (amount == 0) revert MGDLogic_noUnlockedTokens();
         bal.locked -= amount;
         bal.lockedWithMultiplier -= amountWithMultiplier;
@@ -156,13 +154,11 @@ library MFDLogic {
         $.lockedSupply -= amount;
         $.lockedSupplyWithMultiplier -= amountWithMultiplier;
 
-        if (_isRelock || (_address != msg.sender && !$.autoRelockDisabled[_address])) {
-            stakeLogic($, amount, _address, $.defaultLockIndex[_address], true);
-        } else if (_doTransfer) {
-            IERC20($.stakeToken).safeTransfer(_address, amount);
-            emit MFDBase.Withdrawn(_address, amount, $.userBalances[_address].locked);
+        if (_isRelock) {
+            stakeLogic($, amount, _user, $.defaultLockIndex[_user], true);
         } else {
-            revert MGDLogic_invalidAction();
+            IERC20($.stakeToken).safeTransfer(_user, amount);
+            emit MFDBase.Withdrawn(_user, amount, $.userBalances[_user].locked);
         }
         return amount;
     }

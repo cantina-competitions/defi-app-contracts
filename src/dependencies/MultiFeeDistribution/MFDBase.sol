@@ -37,11 +37,7 @@ contract MFDBase is
     /// Constants
     uint256 public constant PERCENT_DIVISOR = 10000; // 100%
     uint256 public constant MAX_SLIPPAGE = 9000; // 10% (used for compounding)
-    uint256 public constant DEFAULT_LOCK_INDEX = 1; // Default lock index
     uint256 private constant PRECISION = 1e18; // Precision for reward per second
-    uint256 private constant _QUART = 25000; //  25%
-    uint256 private constant _HALF = 65000; //  65%
-    uint256 private constant _WHOLE = 100000; // 100%
 
     /// Events
     event Locked(address indexed user, uint256 amount, uint256 stakedBalance, uint256 indexed duration);
@@ -100,28 +96,25 @@ contract MFDBase is
      *  First reward MUST be the `emissionToken`
      * @param initParams MFDBaseInitializerParams
      * - emissionToken address
-     * - stakeToken address
+     * - stakeToken address of the receipt token from providing liquidity of emissionToken
      * - rewardStreamTime Duration that rev rewards are streamed over
-     * - rewardsLookback Duration that rewards loop back
-     * - initLockTypes array of LockType
+     * - rewardsLookback Duration that rewards look back
+     * - initLockTypes initial array of LockTypes
      * - defaultLockTypeIndex index in `initLockTypes` to be used as default
-     * - lockZap contract address
      */
     function _initialize_MFDBase(MFDBaseInitializerParams calldata initParams) internal {
         _checkNoZeroAddress(initParams.emissionToken);
         _checkNoZeroAddress(initParams.stakeToken);
-        _checkNoZeroAddress(initParams.lockZap);
         _checkZeroAmount(initParams.rewardStreamTime);
         _checkZeroAmount(initParams.rewardsLookback);
         _checkZeroAmount(initParams.initLockTypes.length);
 
-        __Ownable_init(_msgSender());
+        __Ownable_init(msg.sender);
         __Pausable_init();
 
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.emissionToken = initParams.emissionToken;
         $.stakeToken = initParams.stakeToken;
-        $.lockZap = initParams.lockZap;
 
         _setLockTypes(initParams.initLockTypes);
         _setRewardStreamParams(initParams.rewardStreamTime, initParams.rewardsLookback);
@@ -130,7 +123,7 @@ contract MFDBase is
         $.isRewardToken[initParams.emissionToken] = true;
         $.rewardData[initParams.emissionToken].lastUpdateTime = block.timestamp;
         $.rewardData[initParams.emissionToken].periodFinish = block.timestamp;
-        $.rewardDistributors[_msgSender()] = true;
+        $.rewardDistributors[msg.sender] = true;
         emit RewardUpdated(initParams.emissionToken, true);
     }
 
@@ -177,7 +170,7 @@ contract MFDBase is
     }
 
     /**
-     * @notice Get all user's locks
+     * @notice Get all user's raw locks (data)
      */
     function getUserLocks(address _user) public view returns (StakedLock[] memory) {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
@@ -289,13 +282,13 @@ contract MFDBase is
     }
 
     /**
-     * @notice Claim all staking `_rewards` received for staking by `_msgSender()`.
+     * @notice Claim all staking `_rewards` received for staking by `msg.sender`.
      * @param _rewardTokens array of reward tokens
      */
     function claimRewards(address[] memory _rewardTokens) public whenNotPaused {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        MFDLogic.updateReward($, _msgSender());
-        MFDLogic.claimRewardsLogic($, _msgSender(), _rewardTokens);
+        MFDLogic.updateReward($, msg.sender);
+        MFDLogic.claimRewardsLogic($, msg.sender, _rewardTokens);
     }
 
     /**
@@ -307,26 +300,36 @@ contract MFDBase is
     }
 
     /**
-     * @notice Withdraw expired locks for `_msgSender()`.
-     * @return withdraw amount
+     * @notice relock expired locks for `msg.sender`.
      */
-    function withdrawExpiredLocks() external whenNotPaused returns (uint256) {
-        uint256 unlocked = getUserBalances(_msgSender()).unlocked;
-        if (unlocked == 0) revert AmountZero();
-        _beforeWithdrawExpiredLocks(unlocked, _msgSender());
+    function relockExpiredLocks() external whenNotPaused {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        return MFDLogic.handleWithdrawOrRelockLogic($, _msgSender(), false, true, $.userLocks[_msgSender()].length);
+        uint256 unlocked = getUserBalances(msg.sender).unlocked;
+        if (unlocked == 0) revert AmountZero();
+        MFDLogic.handleWithdrawOrRelockLogic($, msg.sender, true, $.userLocks[msg.sender].length);
     }
 
     /**
-     * @notice Claims bounty to remove expired locks of a `_user`.
+     * @notice Withdraw expired locks for `msg.sender`.
+     * @return withdraw amount
+     */
+    function withdrawExpiredLocks() external whenNotPaused returns (uint256) {
+        uint256 unlocked = getUserBalances(msg.sender).unlocked;
+        if (unlocked == 0) revert AmountZero();
+        _beforeWithdrawExpiredLocks(unlocked, msg.sender);
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
+        return MFDLogic.handleWithdrawOrRelockLogic($, msg.sender, false, $.userLocks[msg.sender].length);
+    }
+
+    /**
+     * @notice Claims bounty to remove or relock expired locks of a `_user`.
      * @param _user address
      * @param _execute true if this is actual execution
      * @return issueBaseBounty true if needs to issue base bounty
      */
     function claimBounty(address _user, bool _execute) public whenNotPaused returns (bool issueBaseBounty) {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        if (_msgSender() != $.bountyManager) revert InsufficientPermission();
+        if (msg.sender != $.bountyManager) revert InsufficientPermission();
         uint256 unlocked = getUserBalances(_user).unlocked;
         if (unlocked == 0) {
             return (false);
@@ -341,12 +344,43 @@ contract MFDBase is
 
         // Withdraw the user's expried locks
         _beforeWithdrawExpiredLocks(unlocked, _user);
-        MFDLogic.handleWithdrawOrRelockLogic($, _user, false, true, $.userLocks[_user].length);
+        MFDLogic.handleWithdrawOrRelockLogic($, _user, !$.autoRelockDisabled[_user], $.userLocks[_user].length);
+    }
+
+    /**
+     * @notice Claims rewards for `_onBehalf` and compounds them into more staked tokens.
+     * @dev  ONLY callable by `rewardCompounder`, and rewards are transfered to `rewardCompounder` for processing.
+     * In general the role of the `rewardCompounder` is to sell the rewards for the lp token and stake it.
+     * @param _onBehalf address to claim rewards for.
+     */
+    function claimAndCompound(address _onBehalf) external whenNotPaused {
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
+        if (msg.sender != $.rewardCompounder) revert InsufficientPermission();
+        MFDLogic.updateReward($, _onBehalf);
+        uint256 length = $.rewardTokens.length;
+        for (uint256 i; i < length;) {
+            address token = $.rewardTokens[i];
+            if (token != $.emissionToken) {
+                MFDLogic.trackUnseenReward($, token);
+                uint256 reward = $.rewards[_onBehalf][token] / PRECISION;
+                if (reward > 0) {
+                    $.rewards[_onBehalf][token] = 0;
+                    $.rewardData[token].balance = $.rewardData[token].balance - reward;
+
+                    IERC20(token).safeTransfer($.rewardCompounder, reward);
+                    emit RewardPaid(_onBehalf, token, reward);
+                }
+            }
+            unchecked {
+                i++;
+            }
+        }
+        $.lastClaimTime[_onBehalf] = block.timestamp;
     }
 
     /**
      * @notice Manual trigger to observe and track unseen rewards.
-     * @dev This function is used to track rewards for all users.
+     * @dev This function is used to track new rewards received in the contract.
      */
     function trackUnseenRewards() public {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
@@ -365,8 +399,8 @@ contract MFDBase is
     function setDefaultLockIndex(uint256 _lockIndex) external {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         if (_lockIndex >= $.lockTypes.length) revert InvalidType();
-        $.defaultLockIndex[_msgSender()] = _lockIndex;
-        emit DefaultLockIndexUpdated(_msgSender(), _lockIndex);
+        $.defaultLockIndex[msg.sender] = _lockIndex;
+        emit DefaultLockIndexUpdated(msg.sender, _lockIndex);
     }
 
     /**
@@ -376,7 +410,7 @@ contract MFDBase is
      */
     function setAutocompound(bool _enable, uint256 _slippage) external {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        if (_enable == $.autocompoundDisabled[_msgSender()]) {
+        if (_enable == $.autocompoundDisabled[msg.sender]) {
             toggleAutocompound();
         }
         setUserSlippage(_slippage);
@@ -387,13 +421,13 @@ contract MFDBase is
      */
     function toggleAutocompound() public {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        bool newStatus = !$.autocompoundDisabled[_msgSender()];
-        $.autocompoundDisabled[_msgSender()] = newStatus;
-        emit UserAutocompoundUpdated(_msgSender(), newStatus);
+        bool newStatus = !$.autocompoundDisabled[msg.sender];
+        $.autocompoundDisabled[msg.sender] = newStatus;
+        emit UserAutocompoundUpdated(msg.sender, newStatus);
     }
 
     /**
-     * @notice Set what slippage to use for tokens traded during the auto compound process on be_HALF of the user
+     * @notice Set what slippage to use for tokens traded during the auto compound process on behalf of the user
      * @param _slippage the maximum amount of slippage that the user will incur for each compounding trade
      */
     function setUserSlippage(uint256 _slippage) public {
@@ -401,8 +435,8 @@ contract MFDBase is
             revert InvalidAmount();
         }
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        $.userSlippage[_msgSender()] = _slippage;
-        emit UserSlippageUpdated(_msgSender(), _slippage);
+        $.userSlippage[msg.sender] = _slippage;
+        emit UserSlippageUpdated(msg.sender, _slippage);
     }
 
     /**
@@ -411,10 +445,10 @@ contract MFDBase is
      */
     function setAutoRelock(bool status) external virtual {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        $.autoRelockDisabled[_msgSender()] = !status;
+        $.autoRelockDisabled[msg.sender] = !status;
     }
 
-    /// Owner Setters
+    /// Reward Distributors Functions
 
     /**
      * @notice Add a new reward token to be distributed to stakers.
@@ -422,7 +456,7 @@ contract MFDBase is
      */
     function addReward(address _rewardToken) external {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
+        if (!$.rewardDistributors[msg.sender]) revert InsufficientPermission();
         _addReward($, _rewardToken);
     }
 
@@ -432,7 +466,7 @@ contract MFDBase is
      */
     function removeReward(address _rewardToken) external {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
+        if (!$.rewardDistributors[msg.sender]) revert InsufficientPermission();
 
         bool isTokenFound;
         uint256 indexToRemove;
@@ -473,11 +507,13 @@ contract MFDBase is
      */
     function distributeAndTrackReward(address _reward, uint256 _amount) external {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        if (!$.rewardDistributors[_msgSender()]) revert InsufficientPermission();
+        if (!$.rewardDistributors[msg.sender]) revert InsufficientPermission();
         if (!$.isRewardToken[_reward]) revert InvalidAddress();
-        IERC20(_reward).safeTransferFrom(_msgSender(), address(this), _amount);
+        IERC20(_reward).safeTransferFrom(msg.sender, address(this), _amount);
         MFDLogic.trackUnseenReward($, _reward);
     }
+
+    /// Owner Setters
 
     /**
      * @notice Set allowed `rewardDistributors`
@@ -549,39 +585,6 @@ contract MFDBase is
         $.opsTreasury = _opsTreasury;
         $.operationExpenseRatio = _operationExpenseRatio;
         emit OperationExpensesUpdated(_opsTreasury, _operationExpenseRatio);
-    }
-
-    /// External functions
-
-    /**
-     * @notice Claim rewards and compound them into more staked tokens.
-     * @dev Rewards are transfered to converter. In the Radiant Capital protocol
-     * 		the role of the Converter is taken over by Compounder.sol.
-     * @param _onBehalf address to claim.
-     */
-    function claimAndCompound(address _onBehalf) external whenNotPaused {
-        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
-        if (_msgSender() != $.rewardCompounder) revert InsufficientPermission();
-        MFDLogic.updateReward($, _onBehalf);
-        uint256 length = $.rewardTokens.length;
-        for (uint256 i; i < length;) {
-            address token = $.rewardTokens[i];
-            if (token != $.emissionToken) {
-                MFDLogic.trackUnseenReward($, token);
-                uint256 reward = $.rewards[_onBehalf][token] / PRECISION;
-                if (reward > 0) {
-                    $.rewards[_onBehalf][token] = 0;
-                    $.rewardData[token].balance = $.rewardData[token].balance - reward;
-
-                    IERC20(token).safeTransfer($.rewardCompounder, reward);
-                    emit RewardPaid(_onBehalf, token, reward);
-                }
-            }
-            unchecked {
-                i++;
-            }
-        }
-        $.lastClaimTime[_onBehalf] = block.timestamp;
     }
 
     /// Additional functions
