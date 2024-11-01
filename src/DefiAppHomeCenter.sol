@@ -15,12 +15,12 @@ import {StakeHelper} from "./libraries/StakeHelper.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IDefiAppPoolHelper} from "./interfaces/IDefiAppPoolHelper.sol";
 import {IAggregatorV3} from "./interfaces/chainlink/IAggregatorV3.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {UAccessControlUpgradeable} from "./dependencies/UAccessControlUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /// @title DefiAppHomeCenter Contract
 /// @author security@defi.app
-contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
+contract DefiAppHomeCenter is UAccessControlUpgradeable, UUPSUpgradeable {
     using SafeCast for uint256;
     using EpochDistributor for EpochDistributorStorage;
 
@@ -44,6 +44,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     error DefiAppHomeCenter_noChange();
     error DefiAppHomeCenter_invalidArrayLenghts();
     error DefiAppHomeCenter_onlyAdmin();
+    error DefiAppHomeCenter_notStaker();
     error DefiAppHomeCenter_invalidEpochDuration();
     error DefiAppHomeCenter_invalidStartTimestamp();
     error DefiAppHomeCenter_invalidEndBlock();
@@ -54,7 +55,6 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
     uint256 public constant BLOCK_CADENCE = 2; // seconds per block
     uint256 public constant NEXT_EPOCH_BLOCKS_PREFACE = 7 days / BLOCK_CADENCE; // blocks before next epoch can be instantiated
     uint256 public constant PRECISION = 1e18; // precision for rate per second
-    bytes32 public constant STAKE_ADDRESS_ROLE = keccak256("STAKE_ADDRESS_ROLE");
 
     /// State Variables
     // keccak256(abi.encodePacked("DefiAppHomeCenter"))
@@ -74,6 +74,11 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         assembly {
             $.slot := EpochDistributorStorageLocation
         }
+    }
+
+    modifier onlyStaker() {
+        require(msg.sender == _getDefiAppHomeCenterStorage().stakingAddress, DefiAppHomeCenter_notStaker());
+        _;
     }
 
     constructor() {
@@ -97,7 +102,6 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         $.homeToken = _homeToken;
         $.stakingAddress = _stakingAddress;
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _grantRole(STAKE_ADDRESS_ROLE, _stakingAddress);
     }
 
     /// View methods
@@ -189,7 +193,7 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         emit SetMintingActive(_mintingActive);
     }
 
-    function registerStaker(address user) external onlyRole(STAKE_ADDRESS_ROLE) {
+    function callHookRegisterStaker(address user) external onlyStaker {
         EpochDistributorStorage storage $e = _getEpochDistributorStorage();
         UserConfig storage userConfig = $e.userConfigs[user];
         if (userConfig.receiver == address(0)) {
@@ -345,5 +349,5 @@ contract DefiAppHomeCenter is AccessControlUpgradeable, UUPSUpgradeable {
         require(addr != address(0), DefiAppHomeCenter_zeroAddressInput());
     }
 
-    function _authorizeUpgrade(address) internal view override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address) internal view override onlyRole(UPGRADER_ROLE) {}
 }

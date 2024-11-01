@@ -4,10 +4,9 @@ pragma solidity ^0.8.27;
 import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UAccessControlUpgradeable} from "../UAccessControlUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-
 import {RecoverERC20} from "../helpers/RecoverERC20.sol";
 import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
 import {IMultiFeeDistribution} from "../../interfaces/radiant/IMultiFeeDistribution.sol";
@@ -27,8 +26,8 @@ import {MFDLogic} from "./MFDLogic.sol";
 contract MFDBase is
     IMultiFeeDistribution,
     Initializable,
+    UAccessControlUpgradeable,
     PausableUpgradeable,
-    OwnableUpgradeable,
     RecoverERC20,
     UUPSUpgradeable
 {
@@ -109,7 +108,7 @@ contract MFDBase is
         _checkZeroAmount(initParams.rewardsLookback);
         _checkZeroAmount(initParams.initLockTypes.length);
 
-        __Ownable_init(msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         __Pausable_init();
 
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
@@ -520,7 +519,10 @@ contract MFDBase is
      * @param _distributors array of address
      * @param _allowed array of bool
      */
-    function setRewardDistributors(address[] calldata _distributors, bool[] calldata _allowed) external onlyOwner {
+    function setRewardDistributors(address[] calldata _distributors, bool[] calldata _allowed)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         uint256 len = _distributors.length;
         if (len != _allowed.length) revert InvalidAmount();
@@ -538,7 +540,7 @@ contract MFDBase is
      * @notice Sets bounty manager contract.
      * @param _bountyManager contract address
      */
-    function setBountyManager(address _bountyManager) external onlyOwner {
+    function setBountyManager(address _bountyManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _checkNoZeroAddress(_bountyManager);
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.bountyManager = _bountyManager;
@@ -550,7 +552,7 @@ contract MFDBase is
      * @notice Sets the lock types: period and reward multipliers.
      * @param _lockTypes array of LockType
      */
-    function setLockTypes(LockType[] memory _lockTypes) external onlyOwner {
+    function setLockTypes(LockType[] memory _lockTypes) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setLockTypes(_lockTypes);
     }
 
@@ -558,7 +560,7 @@ contract MFDBase is
      * @notice Sets reward compounder contract.
      * @param _rewardCompounder contract address
      */
-    function setRewardCompounder(address _rewardCompounder) external onlyOwner {
+    function setRewardCompounder(address _rewardCompounder) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _checkNoZeroAddress(_rewardCompounder);
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.rewardCompounder = _rewardCompounder;
@@ -569,7 +571,7 @@ contract MFDBase is
      * @notice Sets the lookback period
      * @param _lookback in seconds
      */
-    function setRewardStreamParams(uint256 _streamTime, uint256 _lookback) external onlyOwner {
+    function setRewardStreamParams(uint256 _streamTime, uint256 _lookback) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setRewardStreamParams(_streamTime, _lookback);
     }
 
@@ -578,7 +580,10 @@ contract MFDBase is
      * @param _opsTreasury Address to receive operation expenses
      * @param _operationExpenseRatio Proportion of operation expense
      */
-    function setOperationExpenses(address _opsTreasury, uint256 _operationExpenseRatio) external onlyOwner {
+    function setOperationExpenses(address _opsTreasury, uint256 _operationExpenseRatio)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         _checkNoZeroAddress(_opsTreasury);
         if (_operationExpenseRatio > PERCENT_DIVISOR) revert InvalidRatio();
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
@@ -592,14 +597,14 @@ contract MFDBase is
     /**
      * @notice Pause MFD functionalities
      */
-    function pause() public onlyOwner {
+    function pause() public onlyRole(EMERGENCY_ROLE) {
         _pause();
     }
 
     /**
      * @notice Resume MFD functionalities
      */
-    function unpause() public onlyOwner {
+    function unpause() public onlyRole(EMERGENCY_ROLE) {
         _unpause();
     }
 
@@ -608,7 +613,7 @@ contract MFDBase is
      * @param tokenAddress to recover.
      * @param tokenAmount to recover.
      */
-    function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _recoverERC20(tokenAddress, tokenAmount);
     }
 
@@ -718,5 +723,5 @@ contract MFDBase is
 
     function _beforeWithdrawExpiredLocks(uint256 _amount, address _onBehalf) internal virtual {}
 
-    function _authorizeUpgrade(address) internal view override onlyOwner {}
+    function _authorizeUpgrade(address) internal view override onlyRole(UPGRADER_ROLE) {}
 }

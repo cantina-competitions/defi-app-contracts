@@ -6,6 +6,8 @@ import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
 import {MFDBase} from "./MFDBase.sol";
 import {StakedLock, Balances, MultiFeeDistributionStorage, Reward} from "./MFDDataTypes.sol";
 
+/// @title MFDLogic
+/// @author security@defi.app
 library MFDLogic {
     using SafeERC20 for IERC20;
 

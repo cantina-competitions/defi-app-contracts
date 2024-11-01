@@ -58,13 +58,13 @@ contract DefiAppStaker is MFDBase {
 
     /// Admin Functions
 
-    function setHomeCenter(DefiAppHomeCenter _homeCenter) external onlyOwner {
+    function setHomeCenter(DefiAppHomeCenter _homeCenter) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(address(_homeCenter) != address(0), AddressZero());
         _getDefiAppStakerStorage().homeCenter = _homeCenter;
         emit SetHomeCenter(address(_homeCenter));
     }
 
-    function setGauge(IGauge _gauge) external onlyOwner {
+    function setGauge(IGauge _gauge) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(address(_gauge) != address(0), AddressZero());
         require(
             _gauge.isPool() && _gauge.stakingToken() == _getMFDBaseStorage().stakeToken, DefiAppStaker_invalidGauge()
@@ -98,7 +98,7 @@ contract DefiAppStaker is MFDBase {
         require(address($.homeCenter) != address(0), DefiAppStaker_homeCenterNotSet());
         require(address($.gauge) != address(0), DefiAppStaker_gaugeNotSet());
         if (_amount > 0 && _onBehalf != address(0) && getUserLocks(_onBehalf).length == 0) {
-            $.homeCenter.registerStaker(_onBehalf);
+            $.homeCenter.callHookRegisterStaker(_onBehalf);
         }
     }
 

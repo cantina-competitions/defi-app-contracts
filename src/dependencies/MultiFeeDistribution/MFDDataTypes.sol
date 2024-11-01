@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+/// @title MFDDataTypes
+/// @author security@defi.app
+
 struct LockType {
     uint128 duration;
     uint128 multiplier;
