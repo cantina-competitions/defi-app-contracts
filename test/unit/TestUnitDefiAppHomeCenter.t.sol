@@ -17,8 +17,6 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 
 contract TestUnitDefiAppHomeCenter is BasicFixture {
     // Test constants
-    uint128 public constant DEFAULT_RPS = 1 ether;
-    uint32 public constant DEFAULT_EPOCH_DURATION = 30 days;
     uint256 public constant KNOWN_BLOCK = 100;
     uint256 public constant KNOWN_TIMESTAMP = 1_728_975_600;
 
@@ -29,12 +27,9 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
     DefiAppHomeCenter public center;
 
     /// Merkle roots and proofs for testing
-    /// @notice The roots below are obtained from tests and data used in `test/merkle-sample/merklefunctions.test.ts`
-    /// To get this values set `const DEBUG = true;` in below and run with:
-    /// `bun test test/merkle-sample/merklefunctions.test.ts`
-    bytes32 public constant BALANCE_INFO_ROOT = 0xcc1138a7a86c3d9bfd34f64b8e57c7de8ed1911392831f8dcd60438c90b491a7;
+    bytes32 public balanceRoot;
     bytes32[] public balanceMagicProof;
-    bytes32 public constant DISTRIBUTION_ROOT = 0x13fdc0b471ab3b57e0ad0cc44d92082dc00db9802b0370b634b1eb3395a07dd3;
+    bytes32 public distributionRoot;
     bytes32[] public distributionMagicProof;
 
     bytes32[] public user1DistroProof;
@@ -46,22 +41,17 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         emissionToken = deploy_mock_tocken("Test Home", "tsHOME");
         stakeToken = deploy_mock_tocken("Test LP Home", "tsLP");
 
-        address placeHolderLockZap = address(1);
-        staker = deploy_defiapp_staker(Admin.addr, address(emissionToken), address(stakeToken), placeHolderLockZap);
-
-        vm.startPrank(Admin.addr);
-        DefiAppHomeCenterInitParams memory params = DefiAppHomeCenterInitParams({
-            homeToken: address(emissionToken),
-            stakingAdress: address(staker),
-            initRps: DEFAULT_RPS,
-            initEpochDuration: DEFAULT_EPOCH_DURATION
-        });
-        center = DefiAppHomeCenterDeployer.deploy(fs, "DefiAppHomeCenter", TESTING_ONLY, false, params);
-        staker.setHomeCenter(center);
-        vm.stopPrank();
+        staker = deploy_defiapp_staker(Admin.addr, address(emissionToken), address(stakeToken), address(0));
+        center = deploy_defiapp_homecenter(Admin.addr, address(emissionToken), staker);
 
         vm.roll(KNOWN_BLOCK);
         vm.warp(KNOWN_TIMESTAMP);
+
+        /// @notice The roots below are obtained from tests and data used in `test/merkle-sample/merklefunctions.test.ts`
+        /// To get this values set `const DEBUG = true;` and run with:
+        /// $`bun test test/merkle-sample/merklefunctions.test.ts`
+        balanceRoot = 0xcc1138a7a86c3d9bfd34f64b8e57c7de8ed1911392831f8dcd60438c90b491a7;
+        distributionRoot = 0x13fdc0b471ab3b57e0ad0cc44d92082dc00db9802b0370b634b1eb3395a07dd3;
 
         /// Refer to comment above about `Merkle roots and proofs for testing`
         balanceMagicProof = new bytes32[](2);
@@ -130,18 +120,14 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
 
         if (someone == address(stakeToken)) {
             vm.prank(someone);
-            center.registerStaker(User1.addr);
+            center.callHookRegisterStaker(User1.addr);
 
             // Confirm state changes
             assertEq(User1.addr, center.getUserConfig(User1.addr).receiver);
         } else {
-            vm.expectRevert(
-                abi.encodeWithSelector(
-                    IAccessControl.AccessControlUnauthorizedAccount.selector, someone, stakeAddressRole
-                )
-            );
+            vm.expectRevert(DefiAppHomeCenter.DefiAppHomeCenter_notStaker.selector);
             vm.prank(someone);
-            center.registerStaker(User1.addr);
+            center.callHookRegisterStaker(User1.addr);
             // Confirm NO state changes
             assertEq(address(0), center.getUserConfig(User1.addr).receiver);
         }
@@ -175,7 +161,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
 
         vm.startPrank(Admin.addr);
         emissionToken.approve(address(center), tokensToDistribute);
-        center.settleEpoch(1, BALANCE_INFO_ROOT, DISTRIBUTION_ROOT, balanceMagicProof, distributionMagicProof);
+        center.settleEpoch(1, balanceRoot, distributionRoot, balanceMagicProof, distributionMagicProof);
         vm.stopPrank();
         assertEq(uint8(EpochStates.Distributed), center.getEpochParams(1).state);
     }
@@ -192,7 +178,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         vm.startPrank(Admin.addr);
         emissionToken.approve(address(center), tokensToDistribute);
         vm.expectRevert(DefiAppHomeCenter.DefiAppHomeCenter_invalidEpochState.selector);
-        center.settleEpoch(1, BALANCE_INFO_ROOT, DISTRIBUTION_ROOT, balanceMagicProof, distributionMagicProof);
+        center.settleEpoch(1, balanceRoot, distributionRoot, balanceMagicProof, distributionMagicProof);
         vm.stopPrank();
     }
 
@@ -217,7 +203,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         vm.startPrank(Admin.addr);
         emissionToken.approve(address(center), tokensToDistribute);
         vm.expectRevert(EpochDistributor.EpochDistributor_invalidBalanceProof.selector);
-        center.settleEpoch(1, BALANCE_INFO_ROOT, DISTRIBUTION_ROOT, badBalanceProof, badDistributionProof);
+        center.settleEpoch(1, balanceRoot, distributionRoot, badBalanceProof, badDistributionProof);
         vm.stopPrank();
     }
 
@@ -268,8 +254,8 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
 
     function test_claimTokensSingleEpoch() public {
         vm.startPrank(address(staker));
-        center.registerStaker(User1.addr);
-        center.registerStaker(User2.addr);
+        center.callHookRegisterStaker(User1.addr);
+        center.callHookRegisterStaker(User2.addr);
         vm.stopPrank();
 
         vm.prank(Admin.addr);
@@ -282,7 +268,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         emissionToken.mint(Admin.addr, tokensToDistribute);
         vm.startPrank(Admin.addr);
         emissionToken.approve(address(center), tokensToDistribute);
-        center.settleEpoch(1, BALANCE_INFO_ROOT, DISTRIBUTION_ROOT, balanceMagicProof, distributionMagicProof);
+        center.settleEpoch(1, balanceRoot, distributionRoot, balanceMagicProof, distributionMagicProof);
         vm.stopPrank();
 
         StakingParams memory noStaking = StakingParams({weth9ToStake: 0, minLpTokens: 0, typeIndex: 0});

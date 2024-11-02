@@ -36,8 +36,7 @@ contract TestUnitMFDBase is BasicFixture {
             rewardStreamTime: 7 days,
             rewardsLookback: 1 days,
             initLockTypes: initLockTypes,
-            defaultLockTypeIndex: ONE_MONTH_TYPE_INDEX,
-            lockZap: address(1)
+            defaultLockTypeIndex: ONE_MONTH_TYPE_INDEX
         });
 
         vm.startPrank(Admin.addr);
