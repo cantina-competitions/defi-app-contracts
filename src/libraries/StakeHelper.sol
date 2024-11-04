@@ -22,18 +22,19 @@ library StakeHelper {
         uint256 claimed,
         StakingParams memory staking
     ) public {
+        IERC20 weth9 = IERC20(IDefiAppPoolHelper($.poolHelper).weth9());
         // Handle msg.value cases
         if (msg.value == 0) {
-            IERC20(IDefiAppPoolHelper($.poolHelper).weth9()).safeTransferFrom(
-                caller, address(this), staking.weth9ToStake
-            );
+            weth9.safeTransferFrom(caller, address(this), staking.weth9ToStake);
         } else if (msg.value == staking.weth9ToStake) {
-            _wrapWETH9(IDefiAppPoolHelper($.poolHelper).weth9(), msg.value);
+            _wrapWETH9(address(weth9), msg.value);
         } else {
             revert StakeHelper_msgValueMismatch();
         }
 
         // Zap the claimed tokens paired with the WETH9 into the pool
+        weth9.approve($.poolHelper, staking.weth9ToStake);
+        IERC20($.homeToken).approve($.poolHelper, claimed);
         uint256 received = IPoolHelper($.poolHelper).zapTokens(claimed, staking.weth9ToStake);
         IERC20 lpToken = IERC20(IDefiAppPoolHelper($.poolHelper).lpTokenAddr());
 
