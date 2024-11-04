@@ -195,6 +195,8 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
             lpAmount += minLpTokens;
         }
 
+        uint256 centerPrevBal = homeToken.balanceOf(address(center));
+
         // User1 claims and zaps
         load_weth9(User1.addr, staking.weth9ToStake, weth9);
         vm.startPrank(User1.addr);
@@ -202,6 +204,10 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
         center.claim(1, user1DistroInput, user1DistroProof, staking);
         vm.stopPrank();
 
+        // Check proper balance change at `center` contract
+        assertEq((centerPrevBal - user1DistroInput.tokens), homeToken.balanceOf(address(center)));
+
+        // Check proper staking balance updates at `staker` contract
         Balances memory userBalances = staker.getUserBalances(User1.addr);
         assertEq(userBalances.total >= lpAmount, true);
         assertEq(userBalances.locked >= lpAmount, true);
