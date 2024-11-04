@@ -171,14 +171,13 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
         {
             weth9.approve(address(lockzap), amount);
             (,, uint256 minLpTokens) = vAmmPoolHelper.quoteAddLiquidity(0, amount);
-            console.log("minLpTokens", minLpTokens);
             lpAmount = lockzap.zap(
                 false, // borrow
                 address(0), // lendingPool
                 address(weth9), // asset: to zap with
                 amount, // assetAmt
                 0, // emissionTokenAmt
-                ONE_MONTH_TYPE_INDEX, // lockTypeIndex
+                THREE_MONTH_TYPE_INDEX, // lockTypeIndex
                 minLpTokens // slippage check
             );
         }
@@ -191,15 +190,23 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
         {
             uint256 claimableHomeTokens = user1DistroInput.tokens; // from {TestMerkleConstants.t.sol}
             (, uint256 wethToStake, uint256 minLpTokens) = vAmmPoolHelper.quoteAddLiquidity(claimableHomeTokens, 0);
-            staking = StakingParams({weth9ToStake: wethToStake, minLpTokens: minLpTokens, typeIndex: 0});
+            staking =
+                StakingParams({weth9ToStake: wethToStake, minLpTokens: minLpTokens, typeIndex: THREE_MONTH_TYPE_INDEX});
+            lpAmount += minLpTokens;
         }
 
         // User1 claims and zaps
         load_weth9(User1.addr, staking.weth9ToStake, weth9);
         vm.startPrank(User1.addr);
         weth9.approve(address(center), staking.weth9ToStake);
-        // center.claim(1, user1DistroInput, user1DistroProof, staking); // TODO FIX WHAT IS WRONG IN THIS CALL
+        center.claim(1, user1DistroInput, user1DistroProof, staking);
         vm.stopPrank();
+
+        Balances memory userBalances = staker.getUserBalances(User1.addr);
+        assertEq(userBalances.total >= lpAmount, true);
+        assertEq(userBalances.locked >= lpAmount, true);
+        assertEq(userBalances.unlocked == 0, true);
+        assertEq(userBalances.lockedWithMultiplier, lpAmount * THREE_MONTH_MULTIPLIER);
     }
 
     function settle_test_epoch() internal {
