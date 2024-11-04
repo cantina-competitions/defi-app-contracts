@@ -139,8 +139,31 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
         view
         returns (uint256 pairTokenIn, uint256 weth9In, uint256 lpTokens)
     {
-        (pairTokenIn, weth9In, lpTokens) =
-            router.quoteAddLiquidity(pairToken, weth9, false, factory, pairTokenAmt, weth9Amt);
+        if (pairTokenAmt == 0 && weth9Amt == 0) return (0, 0, 0);
+        if (pairTokenAmt == 0 && weth9Amt > 0) {
+            uint256 halfWeth9 = weth9Amt / 2;
+            return
+                router.quoteAddLiquidity(pairToken, weth9, false, factory, _quoteSimpleOut(weth9, halfWeth9), halfWeth9);
+        }
+        if (pairTokenAmt > 0 && weth9Amt == 0) {
+            return router.quoteAddLiquidity(
+                pairToken, weth9, false, factory, pairTokenAmt, _quoteSimpleOut(pairToken, pairTokenAmt)
+            );
+        } else {
+            return router.quoteAddLiquidity(pairToken, weth9, false, factory, pairTokenAmt, weth9Amt);
+        }
+    }
+
+    /**
+     * @notice UNSAFE: returns `pairToken` price in weth9 from the pool reserves
+     * @dev NOTE Use as an OFF_CHAIN VIEW METHOD ONLY
+     * @return priceInEth 8 decimals price of `pairToken`
+     */
+    function getPrice() external view returns (uint256 priceInEth) {
+        (uint256 pairTokenReserves, uint256 weth9Reserves,) = getReserves();
+        if (pairTokenReserves > 0) {
+            priceInEth = (weth9Reserves * (10 ** 8)) / pairTokenReserves;
+        }
     }
 
     /**
