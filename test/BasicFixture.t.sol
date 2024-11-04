@@ -6,8 +6,13 @@ import "../script/foundry/deploy-libraries/_Index.s.sol";
 import {FileSystem} from "../script/foundry/utils/FileSystem.s.sol";
 import {VmSafe} from "forge-std/StdUtils.sol";
 import {MockToken} from "./mocks/MockToken.t.sol";
+import {IWETH9} from "../src/interfaces/IWETH9.sol";
 import {DefiAppStaker} from "../src/DefiAppStaker.sol";
+import {DefiAppHomeCenter} from "../src/DefiAppHomeCenter.sol";
+import {DLockZap} from "../src/dependencies/DLockZap.sol";
+import {VolatileAMMPoolHelper, IPoolHelper} from "../src/periphery/VolatileAMMPoolHelper.sol";
 import {MFDBaseInitializerParams, LockType} from "../src/dependencies/MultiFeeDistribution/MFDDataTypes.sol";
+import {IGauge} from "../src/interfaces/aerodrome/IGauge.sol";
 
 contract BasicFixture is Test {
     ///////// Constants /////////
@@ -34,6 +39,9 @@ contract BasicFixture is Test {
     uint128 public constant SIX_MONTH_MULTIPLIER = 6;
     uint128 public constant TWELVE_MONTH_MULTIPLIER = 12;
 
+    uint128 public constant DEFAULT_RPS = 1 ether;
+    uint32 public constant DEFAULT_EPOCH_DURATION = 30 days;
+
     function setUp() public virtual {
         User1 = vm.createWallet("User1");
         User2 = vm.createWallet("User2");
@@ -49,7 +57,7 @@ contract BasicFixture is Test {
         return new MockToken(_name, _symbol);
     }
 
-    function deploy_defiapp_staker(address deployer, address emissionToken, address stakeToken, address lockZap)
+    function deploy_defiapp_staker(address deployer, address emissionToken, address stakeToken, address gauge)
         internal
         returns (DefiAppStaker)
     {
@@ -65,14 +73,74 @@ contract BasicFixture is Test {
             rewardStreamTime: 7 days,
             rewardsLookback: 1 days,
             initLockTypes: initLockTypes,
-            defaultLockTypeIndex: ONE_MONTH_TYPE_INDEX,
-            lockZap: lockZap
+            defaultLockTypeIndex: ONE_MONTH_TYPE_INDEX
         });
 
         vm.startPrank(deployer);
         DefiAppStaker staker = DefiAppStakerDeployer.deploy(fs, "DefiAppStaker", TESTING_ONLY, false, params);
+
+        if (gauge != address(0)) {
+            staker.setGauge(IGauge(gauge));
+        }
+
         vm.stopPrank();
 
         return staker;
+    }
+
+    function deploy_defiapp_homecenter(
+        address deployer,
+        address emissionToken,
+        DefiAppStaker staker,
+        address poolHelper
+    ) internal returns (DefiAppHomeCenter) {
+        vm.startPrank(deployer);
+        DefiAppHomeCenterInitParams memory params = DefiAppHomeCenterInitParams({
+            homeToken: address(emissionToken),
+            stakingAdress: address(staker),
+            initRps: DEFAULT_RPS,
+            initEpochDuration: DEFAULT_EPOCH_DURATION
+        });
+        DefiAppHomeCenter center =
+            DefiAppHomeCenterDeployer.deploy(fs, "DefiAppHomeCenter", TESTING_ONLY, false, params);
+        staker.setHomeCenter(center);
+        if (poolHelper != address(0)) {
+            center.setPoolHelper(poolHelper);
+            VolatileAMMPoolHelper(poolHelper).setAllowedZapper(address(center), true);
+        }
+        vm.stopPrank();
+        return center;
+    }
+
+    function deploy_lockzap(
+        address deployer,
+        address emissionToken,
+        address weth9,
+        address mfd,
+        address poolHelper,
+        uint256 lpRatio,
+        address oracleRouter
+    ) internal returns (DLockZap) {
+        DLockZapInitializerParams memory params = DLockZapInitializerParams({
+            emissionToken: emissionToken,
+            weth9: weth9,
+            mfd: mfd,
+            poolHelper: poolHelper,
+            lpRatio: lpRatio,
+            oracleRouter: oracleRouter
+        });
+
+        vm.startPrank(deployer);
+        DLockZap zapper = DLockZapDeployer.deploy(fs, "DLockZap", TESTING_ONLY, false, params);
+        VolatileAMMPoolHelper(poolHelper).setAllowedZapper(address(zapper), true);
+        vm.stopPrank();
+
+        return zapper;
+    }
+
+    function load_weth9(address user, uint256 amount, IWETH9 weth9) internal {
+        vm.deal(user, amount);
+        vm.prank(user);
+        weth9.deposit{value: amount}();
     }
 }

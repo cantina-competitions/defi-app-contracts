@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+/// @title MFDDataTypes
+/// @author security@defi.app
+
 struct LockType {
     uint128 duration;
     uint128 multiplier;
@@ -40,14 +43,12 @@ struct MFDBaseInitializerParams {
     uint256 rewardsLookback;
     LockType[] initLockTypes;
     uint256 defaultLockTypeIndex;
-    address lockZap;
 }
 
 struct MultiFeeDistributionStorage {
     /// Addresses
     address emissionToken;
     address stakeToken;
-    address lockZap;
     address bountyManager;
     address rewardCompounder;
     // OpEx
@@ -57,7 +58,7 @@ struct MultiFeeDistributionStorage {
     uint256 lockedSupply; // Total locked staked tokens in the contract
     uint256 lockedSupplyWithMultiplier; // Total locked value including multipliers
     LockType[] lockTypes; // lock types
-    mapping(address => bool) rewardDistributors; // Addresses approved to call mint
+    mapping(address => bool) rewardDistributors; // Addresses approved to manage rewards
     /// Rewards info
     uint256 rewardStreamTime; // Duration that rev rewards are streamed over
     uint256 rewardsLookback; // Duration that rewards loop back

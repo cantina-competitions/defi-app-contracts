@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import "../../script/foundry/deploy-libraries/_Index.s.sol";
-import {BasicFixture, MockToken} from "../BasicFixture.t.sol";
 import {console} from "forge-std/console.sol";
 import {VolatileAMMPoolHelper, VolatileAMMPoolHelperInitParams} from "../../src/periphery/VolatileAMMPoolHelper.sol";
 import {MockToken, ERC20} from "../mocks/MockToken.t.sol";
@@ -115,9 +114,9 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
         assertEq(wethRequired > 0, true);
     }
 
-    function test_vAMMPoolHelperQuoteWethToPairToken() public view {
+    function test_vAMMPoolHelperQuoteFromWETH9() public view {
         uint256 amountWETHIn = 1 ether;
-        uint256 expectedAmountOut = vAmmPoolHelper.quoteWethToPairToken(amountWETHIn);
+        uint256 expectedAmountOut = vAmmPoolHelper.quoteFromWETH9(amountWETHIn);
         uint256 within75Bps = calculate_reduced_amount(expectedAmountOut, 9925);
         assertApproxEqAbs(expectedAmountOut, (amountWETHIn * INIT_PRICE) / 1e8, within75Bps);
     }
@@ -176,8 +175,7 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
     function test_vAMMPoolHelperZapWeth() public {
         set_zapper(User1.addr);
         address pool = vAmmPoolHelper.lpTokenAddr();
-        address gauge = IVoter(router.voter()).gauges(pool);
-        assertEq(IERC20(gauge).balanceOf(User1.addr), 0);
+        assertEq(IERC20(pool).balanceOf(User1.addr), 0);
 
         uint256 amount = 1 ether;
         weth9.mint(User1.addr, amount);
@@ -187,8 +185,8 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
         uint256 lpTokens = vAmmPoolHelper.zapWETH(amount);
         vm.stopPrank();
 
-        uint256 gaugeBalanceOfZapper = IERC20(gauge).balanceOf(User1.addr);
-        assertEq(gaugeBalanceOfZapper, lpTokens);
+        uint256 balanceOfZapper = IERC20(pool).balanceOf(User1.addr);
+        assertEq(balanceOfZapper, lpTokens);
     }
 
     function test_vAMMPoolHelperZapTokens(uint16 rand1, uint16 rand2) public {
@@ -197,8 +195,7 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
 
         set_zapper(User1.addr);
         address pool = vAmmPoolHelper.lpTokenAddr();
-        address gauge = IVoter(router.voter()).gauges(pool);
-        assertEq(IERC20(gauge).balanceOf(User1.addr), 0);
+        assertEq(IERC20(pool).balanceOf(User1.addr), 0);
 
         emissionToken.mint(User1.addr, pairTokenAmt);
         weth9.mint(User1.addr, weth9Amt);
@@ -212,8 +209,8 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
         uint256 lpTokens = vAmmPoolHelper.zapTokens(pairTokenAmt, weth9Amt);
         vm.stopPrank();
 
-        uint256 gaugeBalanceOfZapper = IERC20(gauge).balanceOf(User1.addr);
-        assertEq(gaugeBalanceOfZapper, lpTokens);
+        uint256 balanceOfZapper = IERC20(pool).balanceOf(User1.addr);
+        assertEq(balanceOfZapper, lpTokens);
     }
 
     function set_zapper(address zapper) internal {

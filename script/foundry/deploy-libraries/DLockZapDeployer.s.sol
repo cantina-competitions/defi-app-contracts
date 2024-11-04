@@ -3,42 +3,46 @@ pragma solidity ^0.8.0;
 
 import {console} from "forge-std/console.sol";
 import {FileSystem} from "../utils/FileSystem.s.sol";
-import {DefiAppHomeCenter} from "../../../src/DefiAppHomeCenter.sol";
+import {DLockZap} from "../../../src/dependencies/DLockZap.sol";
 import {ERC1967ProxyDeployer} from "./ERC1967ProxyDeployer.s.sol";
 
-struct DefiAppHomeCenterInitParams {
-    address homeToken;
-    address stakingAdress;
-    uint128 initRps;
-    uint32 initEpochDuration;
+struct DLockZapInitializerParams {
+    address emissionToken;
+    address weth9;
+    address mfd;
+    address poolHelper;
+    uint256 lpRatio;
+    address oracleRouter;
 }
 
-library DefiAppHomeCenterDeployer {
+library DLockZapDeployer {
     function deploy(
         FileSystem fs,
         string memory contractLabel,
         bool forTesting,
         bool onlyImplementation,
-        DefiAppHomeCenterInitParams memory params
-    ) internal returns (DefiAppHomeCenter) {
+        DLockZapInitializerParams memory params
+    ) internal returns (DLockZap) {
         string memory chainName = fs.getChainName(block.chainid);
-        DefiAppHomeCenter instance = new DefiAppHomeCenter();
+        DLockZap instance = new DLockZap();
         if (onlyImplementation) {
             if (!forTesting) {
-                console.log("DefiAppHomeCenter implementation deployed:", address(instance));
+                console.log("DLockZap implementation deployed:", address(instance));
                 fs.saveAddress(contractLabel, chainName, address(instance));
-                console.log("Saved DefiAppHomeCenter filesystem:", address(instance));
+                console.log("Saved DLockZap filesystem:", address(instance));
             }
             return instance;
         } else {
             bytes memory initData = abi.encodeWithSelector(
-                DefiAppHomeCenter.initialize.selector,
-                params.homeToken,
-                params.stakingAdress,
-                params.initRps,
-                params.initEpochDuration
+                DLockZap.initialize.selector,
+                params.emissionToken,
+                params.weth9,
+                params.mfd,
+                params.poolHelper,
+                params.lpRatio,
+                params.oracleRouter
             );
-            return DefiAppHomeCenter(
+            return DLockZap(
                 payable(ERC1967ProxyDeployer.deploy(fs, contractLabel, forTesting, address(instance), initData))
             );
         }

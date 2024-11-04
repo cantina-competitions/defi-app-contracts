@@ -115,6 +115,14 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
     }
 
     /**
+     * @notice Returns a quote of `weth9Amount` to pairToken amount
+     * @param weth9Amount The amount of WETH9 to quote
+     */
+    function quoteFromWETH9(uint256 weth9Amount) external view returns (uint256 pairtTokenAmount) {
+        return _quoteSimpleOut(weth9, weth9Amount);
+    }
+
+    /**
      * @notice Returns amount of weth9 required to get `lpAmount` of lpTokens.
      * @param lpAmount The amount of LP tokens to quote
      */
@@ -126,12 +134,36 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
         return neededWeth + neededPairInWeth9;
     }
 
+    function quoteAddLiquidity(uint256 pairTokenAmt, uint256 weth9Amt)
+        external
+        view
+        returns (uint256 pairTokenIn, uint256 weth9In, uint256 lpTokens)
+    {
+        if (pairTokenAmt == 0 && weth9Amt == 0) return (0, 0, 0);
+        if (pairTokenAmt == 0 && weth9Amt > 0) {
+            uint256 halfWeth9 = weth9Amt / 2;
+            return
+                router.quoteAddLiquidity(pairToken, weth9, false, factory, _quoteSimpleOut(weth9, halfWeth9), halfWeth9);
+        }
+        if (pairTokenAmt > 0 && weth9Amt == 0) {
+            return router.quoteAddLiquidity(
+                pairToken, weth9, false, factory, pairTokenAmt, _quoteSimpleOut(pairToken, pairTokenAmt)
+            );
+        } else {
+            return router.quoteAddLiquidity(pairToken, weth9, false, factory, pairTokenAmt, weth9Amt);
+        }
+    }
+
     /**
-     * @notice Returns a quote of WETH9 amount to pairToken
-     * @param weth9Amount The amount of WETH9 to quote
+     * @notice UNSAFE: returns `pairToken` price in weth9 from the pool reserves
+     * @dev NOTE Use as an OFF_CHAIN VIEW METHOD ONLY
+     * @return priceInEth 8 decimals price of `pairToken`
      */
-    function quoteWethToPairToken(uint256 weth9Amount) external view returns (uint256) {
-        return _quoteSimpleOut(weth9, weth9Amount);
+    function getPrice() external view returns (uint256 priceInEth) {
+        (uint256 pairTokenReserves, uint256 weth9Reserves,) = getReserves();
+        if (pairTokenReserves > 0) {
+            priceInEth = (weth9Reserves * (10 ** 8)) / pairTokenReserves;
+        }
     }
 
     /**
@@ -186,7 +218,7 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
             routeA,
             routeB
         );
-        lpTokens = router.zapIn(weth9, halfWeth9, halfWeth9, zapInPool, routeA, routeB, msg.sender, true);
+        lpTokens = router.zapIn(weth9, halfWeth9, halfWeth9, zapInPool, routeA, routeB, msg.sender, false);
 
         _refundDust(pairToken, msg.sender);
         _refundDust(weth9, msg.sender);
@@ -207,15 +239,8 @@ contract VolatileAMMPoolHelper is IPoolHelper, Initializable, DustRefunder, Owna
         // Match all possible `pairAmt`
         (uint256 amountA, uint256 amountB,) =
             router.quoteAddLiquidity(pairToken, weth9, false, factory, pairAmt, weth9Amt);
-        (,, lpTokens) = router.addLiquidity(
-            pairToken, weth9, false, pairAmt, amountB, amountA, amountB, address(this), _getDeadline()
-        );
-
-        // Stake in Gauge on-behalf zapper
-        address gauge = IVoter(router.voter()).gauges(pool);
-        IERC20(pool).forceApprove(address(gauge), lpTokens);
-        IGauge(gauge).deposit(lpTokens, msg.sender);
-        IERC20(pool).forceApprove(address(gauge), 0);
+        (,, lpTokens) =
+            router.addLiquidity(pairToken, weth9, false, pairAmt, amountB, amountA, amountB, msg.sender, _getDeadline());
 
         _refundDust(pairToken, msg.sender);
         _refundDust(weth9, msg.sender);
