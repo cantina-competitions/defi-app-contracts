@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "../../script/foundry/deploy-libraries/_Index.s.sol";
 import {BasicFixture, MockToken} from "../BasicFixture.t.sol";
+import {TestMerkleConstants} from "../merkle-sample/TestMerkleConstants.t.sol";
 import {console} from "forge-std/console.sol";
 import {DefiAppStaker} from "../../src/DefiAppStaker.sol";
 import {
@@ -15,7 +16,7 @@ import {
 } from "../../src/DefiAppHomeCenter.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-contract TestUnitDefiAppHomeCenter is BasicFixture {
+contract TestUnitDefiAppHomeCenter is BasicFixture, TestMerkleConstants {
     // Test constants
     uint256 public constant KNOWN_BLOCK = 100;
     uint256 public constant KNOWN_TIMESTAMP = 1_728_975_600;
@@ -26,15 +27,6 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
     DefiAppStaker public staker;
     DefiAppHomeCenter public center;
 
-    /// Merkle roots and proofs for testing
-    bytes32 public balanceRoot;
-    bytes32[] public balanceMagicProof;
-    bytes32 public distributionRoot;
-    bytes32[] public distributionMagicProof;
-
-    bytes32[] public user1DistroProof;
-    bytes32[] public user2DistroProof;
-
     function setUp() public override {
         super.setUp();
 
@@ -42,30 +34,10 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         stakeToken = deploy_mock_tocken("Test LP Home", "tsLP");
 
         staker = deploy_defiapp_staker(Admin.addr, address(emissionToken), address(stakeToken), address(0));
-        center = deploy_defiapp_homecenter(Admin.addr, address(emissionToken), staker);
+        center = deploy_defiapp_homecenter(Admin.addr, address(emissionToken), staker, address(0));
 
         vm.roll(KNOWN_BLOCK);
         vm.warp(KNOWN_TIMESTAMP);
-
-        /// @notice The roots below are obtained from tests and data used in `test/merkle-sample/merklefunctions.test.ts`
-        /// To get this values set `const DEBUG = true;` and run with:
-        /// $`bun test test/merkle-sample/merklefunctions.test.ts`
-        balanceRoot = 0xcc1138a7a86c3d9bfd34f64b8e57c7de8ed1911392831f8dcd60438c90b491a7;
-        distributionRoot = 0x13fdc0b471ab3b57e0ad0cc44d92082dc00db9802b0370b634b1eb3395a07dd3;
-
-        /// Refer to comment above about `Merkle roots and proofs for testing`
-        balanceMagicProof = new bytes32[](2);
-        balanceMagicProof[0] = 0x68eff8bdb05c9df1554ae8bc031b7e51904f0e39512d69802abf31f9b8f40f08;
-        balanceMagicProof[1] = 0xaf7d40f3762de0f03633aa1a43787eb9d6ed84e94456e546aded7eb641349c0c;
-        distributionMagicProof = new bytes32[](2);
-        distributionMagicProof[0] = 0x8312d52780de7b98b53f615ee6bc0afee9ec61ce8a3186e94467f93f26a9cf31;
-        distributionMagicProof[1] = 0xd88860eaeb04444381638dd77d248ec9f1c6a370e0300c99cce64ce794c33923;
-        user1DistroProof = new bytes32[](2);
-        user1DistroProof[0] = 0xd88860eaeb04444381638dd77d248ec9f1c6a370e0300c99cce64ce794c33923;
-        user1DistroProof[1] = 0x747baafa08aaf243810ebcd7b5cc763efe4e63fb04f8f0a558f593ca09acd724;
-        user2DistroProof = new bytes32[](2);
-        user2DistroProof[0] = 0x1b3aa52159b1afa247fce4722ac38cbd20dfbde045632c7f979c264fba318061;
-        user2DistroProof[1] = 0xe311d0c8e006b1841c71da16149c54a812100d6907d09c63952a6e870fdc1a9c;
     }
 
     function test_defiAppHomeCenterDeploymentState() public view {
@@ -83,7 +55,6 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         vm.assume(someone != address(0));
         bool isSomeoneTheAdmin = someone == Admin.addr;
         bytes32 defaultAdmin = 0x00;
-        bytes32 stakeAddressRole = keccak256("STAKE_ADDRESS_ROLE");
         if (isSomeoneTheAdmin) {
             vm.startPrank(someone);
             center.setDefaultRps(DEFAULT_RPS * 2);
@@ -274,23 +245,13 @@ contract TestUnitDefiAppHomeCenter is BasicFixture {
         StakingParams memory noStaking = StakingParams({weth9ToStake: 0, minLpTokens: 0, typeIndex: 0});
 
         // User1 claims tokens
-        uint256 tokensToReceive = 252878048780487820000000; // from file `test/merkle-sample/distro-inputs.json`
-        MerkleUserDistroInput memory user1DistroInput = MerkleUserDistroInput({
-            points: 10000, // from file `test/merkle-sample/distro-inputs.json`
-            tokens: tokensToReceive,
-            userId: User1.addr // from file `test/merkle-sample/distro-inputs.json`
-        });
+        uint256 tokensToReceive = user1DistroInput.tokens; // from {TestMerkleConstants.t.sol}
         vm.prank(User1.addr);
         center.claim(1, user1DistroInput, user1DistroProof, noStaking);
         assertEq(emissionToken.balanceOf(User1.addr), tokensToReceive);
 
         // User2 claims tokens
-        uint256 tokensToReceive2 = 1706926829268292800000000; // from file `test/merkle-sample/distro-inputs.json`
-        MerkleUserDistroInput memory user2DistroInput = MerkleUserDistroInput({
-            points: 67500, // from file `test/merkle-sample/distro-inputs.json`
-            tokens: tokensToReceive2,
-            userId: User2.addr // from file `test/merkle-sample/distro-inputs.json`
-        });
+        uint256 tokensToReceive2 = user2DistroInput.tokens; // from {TestMerkleConstants.t.sol}
         vm.prank(User2.addr);
         center.claim(1, user2DistroInput, user2DistroProof, noStaking);
         assertEq(emissionToken.balanceOf(User2.addr), tokensToReceive2);
