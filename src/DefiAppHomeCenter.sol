@@ -221,7 +221,7 @@ contract DefiAppHomeCenter is UAccessControlUpgradeable, UUPSUpgradeable {
         DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
         if (_shouldInitializeNextEpoch($)) initializeNextEpoch();
         require(epoch < $.currentEpoch, DefiAppHomeCenter_invalidEpoch(epoch));
-        $e.claimLogic($, epoch, distro, distroProof);
+        $e.claimLogic($, epoch, distro, distroProof, staking.weth9ToStake > 0);
         if (staking.weth9ToStake > 0) {
             // Checks done in stakeClaimedLogic
             StakeHelper.stakeClaimedLogic($, msg.sender, distro.tokens, staking);
@@ -241,7 +241,7 @@ contract DefiAppHomeCenter is UAccessControlUpgradeable, UUPSUpgradeable {
         uint256 claimed;
         for (uint256 i = 0; i < len; i++) {
             require(epochs[i] < $.currentEpoch, DefiAppHomeCenter_invalidEpoch(epochs[i]));
-            $e.claimLogic($, epochs[i], distros[i], proofs[i]);
+            $e.claimLogic($, epochs[i], distros[i], proofs[i], staking.weth9ToStake > 0);
             claimed += distros[i].tokens;
         }
         if (staking.weth9ToStake > 0) {

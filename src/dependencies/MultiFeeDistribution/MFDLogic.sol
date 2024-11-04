@@ -2,9 +2,11 @@
 pragma solidity ^0.8.27;
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
 import {MFDBase} from "./MFDBase.sol";
 import {StakedLock, Balances, MultiFeeDistributionStorage, Reward} from "./MFDDataTypes.sol";
+import {IOracleRouter} from "../../interfaces/radiant/IOracleRouter.sol";
 
 /// @title MFDLogic
 /// @author security@defi.app
@@ -308,8 +310,7 @@ library MFDLogic {
         r.periodFinish = block.timestamp + $.rewardStreamTime;
         r.balance += _rewardAmt;
 
-        uint256 rewardUsdValue = 1; // TODO: Implement method to get USD value of the `_rewardAmt`
-        emit MFDBase.RevenueEarned(_rewardToken, _rewardAmt, rewardUsdValue);
+        emit MFDBase.RevenueEarned(_rewardToken, _rewardAmt, _calculateRewardUsdValue($, _rewardToken, _rewardAmt));
     }
 
     /**
@@ -381,5 +382,14 @@ library MFDLogic {
                 emit MFDBase.LockerRemoved(_user);
             }
         }
+    }
+
+    function _calculateRewardUsdValue(MultiFeeDistributionStorage storage $, address _rewardToken, uint256 _rewardAmt)
+        private
+        view
+        returns (uint256)
+    {
+        return (_rewardAmt * IOracleRouter($.oracleRouter).getAssetPrice(_rewardToken))
+            / IERC20Metadata(_rewardToken).decimals();
     }
 }

@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "../../script/foundry/deploy-libraries/_Index.s.sol";
 import {console} from "forge-std/console.sol";
-import {BasicFixture, MockToken} from "../BasicFixture.t.sol";
+import {BasicFixture, MockToken, MockOracleRouter} from "../BasicFixture.t.sol";
 import {
     MFDBase,
     MFDBaseInitializerParams,
@@ -30,13 +30,16 @@ contract TestUnitMFDBase is BasicFixture {
         initLockTypes[SIX_MONTH_TYPE_INDEX] = LockType({duration: 180 days, multiplier: SIX_MONTH_MULTIPLIER});
         initLockTypes[TWELVE_MONTH_TYPE_INDEX] = LockType({duration: 360 days, multiplier: TWELVE_MONTH_MULTIPLIER});
 
+        MockOracleRouter oracleRouter = deploy_mock_oracleRouter(address(emissionToken), HOME_USD_PRICE);
+
         MFDBaseInitializerParams memory params = MFDBaseInitializerParams({
             emissionToken: address(emissionToken),
             stakeToken: address(stakeToken),
             rewardStreamTime: 7 days,
             rewardsLookback: 1 days,
             initLockTypes: initLockTypes,
-            defaultLockTypeIndex: ONE_MONTH_TYPE_INDEX
+            defaultLockTypeIndex: ONE_MONTH_TYPE_INDEX,
+            oracleRouter: address(oracleRouter)
         });
 
         vm.startPrank(Admin.addr);
