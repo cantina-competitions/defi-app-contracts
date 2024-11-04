@@ -109,7 +109,8 @@ library EpochDistributor {
         DefiAppHomeCenterStorage storage $,
         uint256 epoch,
         MerkleUserDistroInput memory distro,
-        bytes32[] calldata distroProof
+        bytes32[] calldata distroProof,
+        bool withStaking
     ) public {
         require($e.isClaimed[epoch][distro.userId] == false, EpochDistributor_epochAlreadyDistributed());
         require(
@@ -117,7 +118,7 @@ library EpochDistributor {
             EpochDistributor_invalidDistroProof()
         );
         address receiver = $e.userConfigs[distro.userId].receiver;
-        Home($.homeToken).safeTransfer(receiver, distro.tokens);
+        if (!withStaking) Home($.homeToken).safeTransfer(receiver, distro.tokens);
         $e.isClaimed[epoch][distro.userId] = true;
         emit DefiAppHomeCenter.Claimed(epoch, distro.userId, receiver, distro.tokens);
     }
