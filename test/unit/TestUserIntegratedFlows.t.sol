@@ -31,7 +31,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
     // Test constants
-    uint256 public constant WETH_USD_PRICE = 2500 ether; // eth price in usd in 18 decimals
     uint256 public constant INITIAL_WETH9_AMT = 1000 ether;
     uint256 public constant INITIAL_PAIR_AMT = 2_500_000 ether;
     uint256 public constant INIT_PRICE = (INITIAL_PAIR_AMT * 1e8) / INITIAL_WETH9_AMT; // INIT_PRICE = (emitToken / weth9); in 8 decimals
@@ -83,10 +82,9 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
         gauge = MockGauge(create_gauge(Admin.addr, address(homeToken), address(weth9), address(poolFactory)));
 
         staker = deploy_defiapp_staker(Admin.addr, address(homeToken), address(pool), address(gauge));
-        center = deploy_defiapp_homecenter(Admin.addr, address(homeToken), staker, address(vAmmPoolHelper));
-
-        oracleRouter = new MockOracleRouter();
+        oracleRouter = MockOracleRouter(staker.oracleRouter());
         oracleRouter.mock_set_price(address(weth9), WETH_USD_PRICE);
+        center = deploy_defiapp_homecenter(Admin.addr, address(homeToken), staker, address(vAmmPoolHelper));
 
         lockzap = deploy_lockzap(
             Admin.addr,

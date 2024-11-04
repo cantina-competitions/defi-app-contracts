@@ -6,6 +6,7 @@ import "../script/foundry/deploy-libraries/_Index.s.sol";
 import {FileSystem} from "../script/foundry/utils/FileSystem.s.sol";
 import {VmSafe} from "forge-std/StdUtils.sol";
 import {MockToken} from "./mocks/MockToken.t.sol";
+import {MockOracleRouter} from "./mocks/MockOracleRouter.t.sol";
 import {IWETH9} from "../src/interfaces/IWETH9.sol";
 import {DefiAppStaker} from "../src/DefiAppStaker.sol";
 import {DefiAppHomeCenter} from "../src/DefiAppHomeCenter.sol";
@@ -27,6 +28,11 @@ contract BasicFixture is Test {
     VmSafe.Wallet public Treasury;
 
     FileSystem public fs;
+
+    /// Environment test constants
+    uint256 public constant WETH_USD_PRICE = 2500 ether; // 2500 USD/ETH in 18 decimals
+    uint256 public constant WETH_HOME_PRICE = 2500 ether; // 2500 HOME/ETH in 18 decimals, assumes 1 HOME = 1 USD
+    uint256 public constant HOME_USD_PRICE = 1 ether; // 2500 HOME/USD in 18 decimals, assumes 1 LP = 1 USD
 
     /// App constants
     uint256 public constant ONE_MONTH_TYPE_INDEX = 0;
@@ -57,6 +63,12 @@ contract BasicFixture is Test {
         return new MockToken(_name, _symbol);
     }
 
+    function deploy_mock_oracleRouter(address asset, uint256 assetPrice) internal returns (MockOracleRouter) {
+        MockOracleRouter oracleRouter = new MockOracleRouter();
+        oracleRouter.mock_set_price(asset, assetPrice);
+        return oracleRouter;
+    }
+
     function deploy_defiapp_staker(address deployer, address emissionToken, address stakeToken, address gauge)
         internal
         returns (DefiAppStaker)
@@ -73,7 +85,8 @@ contract BasicFixture is Test {
             rewardStreamTime: 7 days,
             rewardsLookback: 1 days,
             initLockTypes: initLockTypes,
-            defaultLockTypeIndex: ONE_MONTH_TYPE_INDEX
+            defaultLockTypeIndex: ONE_MONTH_TYPE_INDEX,
+            oracleRouter: address(deploy_mock_oracleRouter(emissionToken, HOME_USD_PRICE))
         });
 
         vm.startPrank(deployer);
