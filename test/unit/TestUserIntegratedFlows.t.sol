@@ -205,7 +205,8 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
         vm.stopPrank();
 
         // Check proper balance change at `center` contract
-        assertEq((centerPrevBal - user1DistroInput.tokens), homeToken.balanceOf(address(center)));
+        assertEq(homeToken.balanceOf(address(center)), (centerPrevBal - user1DistroInput.tokens));
+        assertEq(weth9.balanceOf(address(center)), 0);
 
         // Check proper staking balance updates at `staker` contract
         Balances memory userBalances = staker.getUserBalances(User1.addr);
