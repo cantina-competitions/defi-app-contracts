@@ -71,6 +71,7 @@ contract DLockZap is Initializable, UAccessControlUpgradeable, PausableUpgradeab
     error DLockZap_invalidZapETHSource();
     error DLockZap_insufficientETH();
     error DLockZap_slippageTooHigh();
+    error DLockZap_momentarilyTokenSwapNotSupported();
 
     uint256 public constant RATIO_DIVISOR = 10_000;
     uint256 public constant VARIABLE_INTEREST_RATE_MODE = 2;
@@ -181,12 +182,12 @@ contract DLockZap is Initializable, UAccessControlUpgradeable, PausableUpgradeab
      * @dev This function is mainly used to calculate how much of the specified token is needed to match the provided
      * emissionToken amount when providing lpReceived to an AMM.
      */
-    function quoteFromToken(address token, uint256 emissionTokenIn) public returns (uint256) {
+    function quoteFromToken(address token, uint256 emissionTokenIn) public view returns (uint256) {
         DLockZapStorage storage $ = _getDLockZapStorage();
         address weth9_ = address($.weth9);
         if (token != weth9_) {
             uint256 wethAmount = $.poolHelper.quoteFromToken(emissionTokenIn);
-            return _quoteUniswap(token, weth9_, wethAmount);
+            return _quoteSwap(token, weth9_, wethAmount);
         }
         return $.poolHelper.quoteFromToken(emissionTokenIn);
     }
@@ -404,24 +405,15 @@ contract DLockZap is Initializable, UAccessControlUpgradeable, PausableUpgradeab
      */
     function _safeSwap(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin)
         internal
+        pure
         returns (uint256)
     {
-        /// TODO: find best way to swap
-        // IERC20(_tokenIn).forceApprove(uniRouter, _amountIn);
-        // bytes memory route = _uniV3Route[_tokenIn][_tokenOut];
-        // try IUniswapRouter(uniRouter).exactInput(
-        //     ISwapRouter.ExactInputParams({
-        //         path: route,
-        //         recipient: address(this),
-        //         deadline: block.timestamp,
-        //         amountIn: _amountIn,
-        //         amountOutMinimum: _amountOutMin
-        //     })
-        // ) returns (uint256 amountOut) {
-        //     return amountOut;
-        // } catch {
-        //     revert Errors.SwapFailed(_tokenIn, _amountIn);
-        // }
+        /// TODO: To be implemented as a future feature: to swap any token in order to `zap`
+        tokenIn;
+        tokenOut;
+        amountIn;
+        amountOutMin;
+        revert DLockZap_momentarilyTokenSwapNotSupported();
     }
 
     /**
@@ -429,16 +421,13 @@ contract DLockZap is Initializable, UAccessControlUpgradeable, PausableUpgradeab
      * @param tokenIn to be swapped
      * @param tokenOut to be received
      * @param amountOut expected to be received
-     * @return amountInRequired to get _amountOut
      */
-    function _quoteUniswap(address tokenIn, address tokenOut, uint256 amountOut)
-        internal
-        returns (uint256 amountInRequired)
-    {
-        // TODO see simpleSwap
-        // NOTE!: For `quoteExactOutput` the path must be provided in reverse order:
-        // i.e. _tokenOut -> _tokenIn
-        // return uniV3Quoter.quoteExactOutput(_uniV3Route[_tokenOut][_tokenIn], _amountOut);
+    function _quoteSwap(address tokenIn, address tokenOut, uint256 amountOut) internal pure returns (uint256) {
+        // TODO Refer to `_safeSwap`,
+        tokenIn;
+        tokenOut;
+        amountOut;
+        revert DLockZap_momentarilyTokenSwapNotSupported();
     }
 
     /// Emergency methods
