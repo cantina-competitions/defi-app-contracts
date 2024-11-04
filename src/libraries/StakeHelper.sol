@@ -15,7 +15,7 @@ library StakeHelper {
     error StakeHelper_notEnoughLpTokensReceived();
     error StakeHelper_insufficientWeth9();
     error StakeHelper_safeTransferETHFailed();
-    error StakeHelper_excessClaimedTokens();
+    error StakeHelper_excessZappedTokens();
 
     function stakeClaimedLogic(
         DefiAppHomeCenterStorage storage $,
@@ -41,11 +41,13 @@ library StakeHelper {
         homeToken.approve($.poolHelper, claimed);
         uint256 received;
         {
-            uint256 preZapBal = homeToken.balanceOf(address(this));
+            uint256 preClaimBal = homeToken.balanceOf(address(this));
+            uint256 preWeth9Bal = weth9.balanceOf(address(this));
             received = IPoolHelper($.poolHelper).zapTokens(claimed, staking.weth9ToStake);
-            uint256 postZapBal = homeToken.balanceOf(address(this));
-            // Check for excess claimed tokens
-            _checkAndRefundUnusedClaimedBalances(homeToken, preZapBal, postZapBal, caller, claimed);
+
+            // Check for dust claimed and weth9 tokens
+            _refundUnusedZapBalances(homeToken, preClaimBal, claimed, caller);
+            _refundUnusedZapBalances(weth9, preWeth9Bal, staking.weth9ToStake, caller);
         }
 
         // Check for bad slippage or manipulation
@@ -61,19 +63,14 @@ library StakeHelper {
         require(readLpTokenBal >= received && received >= expected, StakeHelper_notEnoughLpTokensReceived());
     }
 
-    function _checkAndRefundUnusedClaimedBalances(
-        IERC20 token,
-        uint256 preZapClaimedBal,
-        uint256 postZapClaimedBal,
-        address caller,
-        uint256 claimable
-    ) private {
-        uint256 zappedAmount = preZapClaimedBal - postZapClaimedBal; // balance MUST always decreases after zap
-        if (zappedAmount > claimable) {
-            revert StakeHelper_excessClaimedTokens();
-        } else if (zappedAmount <= claimable) {
-            // Refund the claimable tokens not zapped
-            uint256 excess = claimable - zappedAmount;
+    function _refundUnusedZapBalances(IERC20 token, uint256 preBal, uint256 intendedAmt, address caller) private {
+        uint256 postZapBal = token.balanceOf(address(this));
+        uint256 zappedAmount = preBal - postZapBal; // balance MUST always decreases after zap
+        if (zappedAmount > intendedAmt) {
+            revert StakeHelper_excessZappedTokens();
+        } else if (zappedAmount <= intendedAmt) {
+            // Refund the intendedAmt tokens not zapped
+            uint256 excess = intendedAmt - zappedAmount;
             if (excess > 0) token.safeTransfer(caller, excess);
         }
     }
