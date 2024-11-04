@@ -48,7 +48,7 @@ library StakeHelper {
 
     function _checkLpTokensReceived(IERC20 lpToken, uint256 received, uint256 expected) private view {
         uint256 readLpTokenBal = lpToken.balanceOf(address(this));
-        require(readLpTokenBal >= received && received > expected, StakeHelper_notEnoughLpTokensReceived());
+        require(readLpTokenBal >= received && received >= expected, StakeHelper_notEnoughLpTokensReceived());
     }
 
     function _wrapWETH9(address weth9, uint256 amount) private {
