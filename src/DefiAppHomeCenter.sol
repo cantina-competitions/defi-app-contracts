@@ -193,6 +193,13 @@ contract DefiAppHomeCenter is UAccessControlUpgradeable, UUPSUpgradeable {
         emit SetMintingActive(_mintingActive);
     }
 
+    function setPoolHelper(address _poolHelper) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _checkZeroAddress(_poolHelper);
+        DefiAppHomeCenterStorage storage $ = _getDefiAppHomeCenterStorage();
+        $.poolHelper = _poolHelper;
+        emit SetPoolHelper(_poolHelper);
+    }
+
     function callHookRegisterStaker(address user) external onlyStaker {
         EpochDistributorStorage storage $e = _getEpochDistributorStorage();
         UserConfig storage userConfig = $e.userConfigs[user];
