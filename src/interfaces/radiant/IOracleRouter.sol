@@ -13,13 +13,6 @@ interface IOracleRouter {
      * @return The underlying asset price
      *  Zero means the price is unavailable.
      */
-
-    /**
-     * @dev returns the asset price in ETH
-     * @param asset the address of the asset
-     * @return the ETH price of the asset
-     *
-     */
     function getAssetPrice(address asset) external view returns (uint256);
 
     /// @notice Gets a list of prices from a list of assets addresses

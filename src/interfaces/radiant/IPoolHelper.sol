@@ -15,6 +15,10 @@ interface IPoolHelper {
         view
         returns (uint256 pairTokenReserve, uint256 weth9Reserve, uint256 lpTokenSupply);
 
+    /// @notice Returns the price of the pair token in WETH9 from the pool reserves
+    /// @dev UNSAFE! Unless properly checked use this as OFF_CHAIN VIEW METHOD ONLY!
+    function getPrice() external view returns (uint256 pairTokenPriceInWeth9);
+
     /// @notice Returns the price of LP token in WETH9
     /// @param _pairTokenPriceInWeth9 The price of the pair token in WETH9
     function getLpPrice(uint256 _pairTokenPriceInWeth9) external view returns (uint256 lpPriceInWeth9);
