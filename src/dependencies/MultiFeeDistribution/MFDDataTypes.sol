@@ -43,6 +43,7 @@ struct MFDBaseInitializerParams {
     uint256 rewardsLookback;
     LockType[] initLockTypes;
     uint256 defaultLockTypeIndex;
+    address oracleRouter;
 }
 
 struct MultiFeeDistributionStorage {
@@ -51,6 +52,7 @@ struct MultiFeeDistributionStorage {
     address stakeToken;
     address bountyManager;
     address rewardCompounder;
+    address oracleRouter;
     // OpEx
     address opsTreasury;
     uint256 operationExpenseRatio; // Reward ratio for operation expenses

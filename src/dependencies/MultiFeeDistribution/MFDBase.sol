@@ -104,6 +104,7 @@ contract MFDBase is
     function _initialize_MFDBase(MFDBaseInitializerParams calldata initParams) internal {
         _checkNoZeroAddress(initParams.emissionToken);
         _checkNoZeroAddress(initParams.stakeToken);
+        _checkNoZeroAddress(initParams.oracleRouter);
         _checkZeroAmount(initParams.rewardStreamTime);
         _checkZeroAmount(initParams.rewardsLookback);
         _checkZeroAmount(initParams.initLockTypes.length);
@@ -114,6 +115,7 @@ contract MFDBase is
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         $.emissionToken = initParams.emissionToken;
         $.stakeToken = initParams.stakeToken;
+        $.oracleRouter = initParams.oracleRouter;
 
         _setLockTypes(initParams.initLockTypes);
         _setRewardStreamParams(initParams.rewardStreamTime, initParams.rewardsLookback);
@@ -142,6 +144,14 @@ contract MFDBase is
     function stakeToken() external view returns (address) {
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return $.stakeToken;
+    }
+
+    /**
+     * @notice Return stake token.
+     */
+    function oracleRouter() external view returns (address) {
+        MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
+        return $.oracleRouter;
     }
 
     /**
