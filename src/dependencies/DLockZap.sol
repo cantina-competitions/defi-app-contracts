@@ -6,7 +6,7 @@ import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extens
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UAccessControlUpgradeable} from "./UAccessControlUpgradeable.sol";
+import {UAccessControl} from "./UAccessControl.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {IMultiFeeDistribution} from "../interfaces/radiant/IMultiFeeDistribution.sol";
@@ -18,7 +18,7 @@ import {IOracleRouter} from "../interfaces/radiant/IOracleRouter.sol";
 
 /// @title DLockZap contract
 /// @author security@defi.app
-contract DLockZap is Initializable, UAccessControlUpgradeable, PausableUpgradeable, DustRefunder, UUPSUpgradeable {
+contract DLockZap is Initializable, UAccessControl, PausableUpgradeable, DustRefunder, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     struct ZapParams {

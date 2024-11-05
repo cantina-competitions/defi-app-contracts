@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UAccessControlUpgradeable} from "../UAccessControlUpgradeable.sol";
+import {UAccessControl} from "../UAccessControl.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {RecoverERC20} from "../helpers/RecoverERC20.sol";
@@ -26,7 +26,7 @@ import {MFDLogic} from "./MFDLogic.sol";
 contract MFDBase is
     IMultiFeeDistribution,
     Initializable,
-    UAccessControlUpgradeable,
+    UAccessControl,
     PausableUpgradeable,
     RecoverERC20,
     UUPSUpgradeable

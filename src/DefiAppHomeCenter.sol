@@ -15,12 +15,12 @@ import {StakeHelper} from "./libraries/StakeHelper.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IDefiAppPoolHelper} from "./interfaces/IDefiAppPoolHelper.sol";
 import {IAggregatorV3} from "./interfaces/chainlink/IAggregatorV3.sol";
-import {UAccessControlUpgradeable} from "./dependencies/UAccessControlUpgradeable.sol";
+import {UAccessControl} from "./dependencies/UAccessControl.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /// @title DefiAppHomeCenter Contract
 /// @author security@defi.app
-contract DefiAppHomeCenter is UAccessControlUpgradeable, UUPSUpgradeable {
+contract DefiAppHomeCenter is UAccessControl, UUPSUpgradeable {
     using SafeCast for uint256;
     using EpochDistributor for EpochDistributorStorage;
 
