@@ -9,5 +9,3 @@
 @layerzerolabs/lz-evm-messagelib-v2/=lib/lz-v2/packages/layerzero-v2/evm/messagelib/
 @layerzerolabs/lz-evm-v1-0.7/contracts/interfaces/=src/interfaces/layerzero/
 solidity-bytes-utils/contracts/=src/dependencies/libraries/
-@layerzerolabs/lz-evm-messagelib-v2/contracts/interfaces/=src/interfaces/layerzero/
- lib/lz-v2/packages/layerzero-v2/evm/messagelib/contracts/interfaces/=src/interfaces/layerzero/
