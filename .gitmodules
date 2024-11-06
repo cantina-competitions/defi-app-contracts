@@ -13,9 +13,9 @@
 [submodule "lib/uniswap-v3-periphery"]
 	path = lib/uniswap-v3-periphery
 	url = https://github.com/Uniswap/v3-periphery
-[submodule "lib/lz-devtools"]
-	path = lib/lz-devtools
-	url = https://github.com/LayerZero-Labs/devtools
 [submodule "lib/lz-v2"]
 	path = lib/lz-v2
 	url = https://github.com/LayerZero-Labs/layerzero-v2
+[submodule "lib/lz-devtools"]
+	path = lib/lz-devtools
+	url = https://github.com/defi-app/layerzero-devtools
