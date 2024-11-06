@@ -5,7 +5,9 @@
 @layerzerolabs/oft-evm/=lib/lz-devtools/packages/oft-evm/
 @layerzerolabs/oapp-evm/=lib/lz-devtools/packages/oapp-evm/
 @layerzerolabs/lz-evm-protocol-v2/=lib/lz-v2/packages/layerzero-v2/evm/protocol
-@layerzerolabs/test-devtools-evm-foundry/=lib/lz-devtools/packages/test-devtools-evm-foundry
+@layerzerolabs/test-devtools-evm-foundry/=lib/lz-devtools/packages/test-devtools-evm-foundry/
 @layerzerolabs/lz-evm-messagelib-v2/=lib/lz-v2/packages/layerzero-v2/evm/messagelib/
 @layerzerolabs/lz-evm-v1-0.7/contracts/interfaces/=src/interfaces/layerzero/
 solidity-bytes-utils/contracts/=src/dependencies/libraries/
+@layerzerolabs/lz-evm-messagelib-v2/contracts/interfaces/=src/interfaces/layerzero/
+ lib/lz-v2/packages/layerzero-v2/evm/messagelib/contracts/interfaces/=src/interfaces/layerzero/
