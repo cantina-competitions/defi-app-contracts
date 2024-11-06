@@ -41,5 +41,5 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test --optimize false -vvv
+          forge test --optimizer-runs 200 -vvv
         id: test

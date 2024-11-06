@@ -49,6 +49,10 @@ contract BasicFixture is Test {
     uint32 public constant DEFAULT_EPOCH_DURATION = 30 days;
 
     function setUp() public virtual {
+        _internalSetUp();
+    }
+
+    function _internalSetUp() internal {
         User1 = vm.createWallet("User1");
         User2 = vm.createWallet("User2");
         User3 = vm.createWallet("User3");
