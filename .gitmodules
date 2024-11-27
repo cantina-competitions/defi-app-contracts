@@ -18,4 +18,4 @@
 	url = https://github.com/LayerZero-Labs/layerzero-v2
 [submodule "lib/lz-devtools"]
 	path = lib/lz-devtools
-	url = https://github.com/defi-app/layerzero-devtools
+	url = https://github.com/0xdcota/layerzero-devtools.git
