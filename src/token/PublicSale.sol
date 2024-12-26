@@ -4,22 +4,12 @@ pragma solidity ^0.8.27;
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 /// @title PublicSale Contract
 /// @author security@defi.app
 contract PublicSale is AccessControl, Pausable {
-    /*//////////////////////////////////////////////////////////////
-                            LIBRARIES
-    //////////////////////////////////////////////////////////////*/
-
     using SafeERC20 for IERC20;
 
-    /*//////////////////////////////////////////////////////////////
-                            STRUCTS & ENUMS
-    //////////////////////////////////////////////////////////////*/
-
-    // ============== Structs ==============
     /**
      * @notice Info about user deposit
      */
@@ -34,12 +24,12 @@ contract PublicSale is AccessControl, Pausable {
     struct Tier {
         uint256 price; // Price of the token
         uint256 cap; // Cap for the tier
+        uint256 vesting; // Vesting time for the tier
     }
 
     struct SaleSchedule {
-        uint256 comingSoon; // End timestamp for coming soon phase
-        uint256 onlyKyc; // End timestamp of only KYC phase
-        uint256 tokenPurchase; // End timestamp of token purchase phase
+        uint256 start; // Public sale start timestamp
+        uint256 end; // End timestamp
     }
 
     struct SaleParameters {
@@ -47,109 +37,23 @@ contract PublicSale is AccessControl, Pausable {
         uint256 maxDepositAmount; // Maximum USD amount allowed per wallet.
     }
 
-    // ============== Enums ===============
-
     enum Stages {
         Completed, // Sale is final
         ComingSoon, // Contract is deployed but not yet started
-        OnlyKyc, // Only Merkle root updates and setup functions
         TokenPurchase // Deposit and purchase tokens
 
     }
 
-    /*//////////////////////////////////////////////////////////////
-                            STATE VARIABLES
-    //////////////////////////////////////////////////////////////*/
-
-    // ============== Contract Setup ===============
-
-    /**
-     * @dev Admin Role: Manages contract parameters setup like sale configuration and recipient of funds
-     */
-    bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-
-    /**
-     * @dev Operator role: updating merkle root
-     */
-    bytes32 private constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
-
-    /**
-     * @notice Maximum funds allowed to be collected.
-     * @dev 20,000,000 USDC/T (*) times 10^6, 6 is the number of decimals of USDC/USDT.
-     */
-    uint256 public maxTotalFunds;
-
-    /**
-     * @dev Merkle root for whitelist verification.
-     */
-    bytes32 public merkleRoot;
-
-    /**
-     * @dev Recipient of collected funds.
-     */
-    address private immutable treasury;
-
-    /**
-     * @dev Address of USDC token.
-     */
-    IERC20 private immutable USDC;
-
-    /**
-     * @dev Address of USDT token.
-     */
-    IERC20 private immutable USDT;
-
-    /**
-     * @dev Array of Tier structs representing different price tiers in Sale.
-     */
-    Tier[4] public tiers;
-
-    /**
-     * @dev Sale stages timestamps.
-     */
-    SaleSchedule public saleSchedule;
-
-    /**
-     * @dev Sale constraints for each wallet.
-     */
-    SaleParameters public saleParameters;
-
-    // ============ Tracking the sale =============
-
-    /**
-     * @dev Total amount of USD collected so far.
-     */
-    uint256 public totalFundsCollected;
-
-    /**
-     * @dev Price tier tracking.
-     */
-    uint256 public activeTierIndex;
-
-    /**
-     * @dev Mapping to track deposits by each user.
-     */
-    mapping(address => UserDepositInfo) public userDeposits;
-
-    /*//////////////////////////////////////////////////////////////
-                                 EVENTS
-    //////////////////////////////////////////////////////////////*/
-
-    event ExternalContractsSet(address indexed user, address treasury, IERC20 usdc, IERC20 usdt);
-    event TiersUpdate(address indexed user, Tier[4] tiers);
+    event ExternalContractsSet(address indexed user, address treasury, IERC20 usdc);
+    event TiersUpdate(address indexed user, Tier[3] tiers);
+    event MaxTotalFundsUpdate(address indexed user, uint256 maxTotalFunds);
     event SaleParametersUpdate(address indexed user, uint256 minDepositAmount, uint256 maxDepositAmount);
-    event SaleScheduleUpdate(address indexed user, uint256 comingSoon, uint256 onlyKyc, uint256 tokenPurchase);
-    event MerkleRootUpdate(address indexed user, bytes32 newRoot);
-    event ActiveTierUpdate(address indexed user, uint256 oldTierIndex, uint256 newTierIndex);
+    event SaleScheduleUpdate(address indexed user, uint256 comingSoon, uint256 tokenPurchase);
     event TokensPurchase(
         address indexed user, uint256 depositedAmount, uint256 purchasedTokens, uint256 totalFundsCollected
     );
     event SaleCompleted();
-    event WithdrawAsset(address asset, address withdrawTo, uint256 amount);
-
-    /*//////////////////////////////////////////////////////////////
-                                 ERRORS
-    //////////////////////////////////////////////////////////////*/
+    event RecoverAsset(address asset, address withdrawTo, uint256 amount);
 
     /**
      * @dev Error thrown when a user is not verified.
@@ -159,18 +63,14 @@ contract PublicSale is AccessControl, Pausable {
     error UserNotVerified(bytes4 _selector, address _user);
 
     /**
-     * @dev Error thrown when the purchase input is invalid.
-     * @param _selector The function selector that triggered the error.
-     * @param _input The invalid input provided.
-     */
-    /**
      * @dev Error indicating that the purchase input is invalid.
      * @param _selector The function selector where the error occurred.
      * @param _input The invalid input that was provided.
      * @param _message A message providing additional details about the error.
      * @param _suggestedInput A suggested valid input to correct the error.
      */
-    error InvalidPurchaseInput(bytes4 _selector, bytes32 _input, bytes32 _message, uint256 _suggestedInput);
+    error InvalidPurchaseInputHandler(bytes4 _selector, bytes32 _input, bytes32 _message, uint256 _suggestedInput);
+    error InvalidPurchaseInput(bytes4 _selector, bytes32 _input, bytes32 _message);
 
     /**
      * @dev Error thrown when an input is invalid.
@@ -187,26 +87,54 @@ contract PublicSale is AccessControl, Pausable {
      */
     error WrongStage(bytes4 _selector, Stages _currentStage, Stages _requiredStage);
 
-    /*//////////////////////////////////////////////////////////////
-                             MODIFIERS
-    //////////////////////////////////////////////////////////////*/
+    /**
+     * @dev Admin Role: Manages contract parameters setup like sale configuration and recipient of funds
+     */
+    bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     /**
-     * @dev Modifier to check if the sale is in the correct stage
-     * @param _requiredStage The minimal required stage for the function to execute
-     * @notice Compares stages sequentially: OnlyKyc < TokenPurchase < Completed
-     *         If the current stage if before the required stage, the function will revert
+     * @notice Maximum funds allowed to be collected.
+     * @dev 20,000,000 USDC(*) times 10^6, 6 is the number of decimals of USDC.
      */
-    modifier fromStage(Stages _requiredStage) {
-        Stages _currentStage = _getCurrentStage();
+    uint256 public maxTotalFunds;
 
-        // completed = 0, comingSoon = 1, onlyKyc = 2, tokenPurchase = 3
-        if (_currentStage < _requiredStage) {
-            revert WrongStage(msg.sig, _currentStage, _requiredStage);
-        }
+    /**
+     * @dev Recipient of collected funds.
+     */
+    address private immutable treasury;
 
-        _;
-    }
+    /**
+     * @dev Address of USDC token.
+     */
+    IERC20 private immutable USDC;
+
+    /**
+     * @dev Array of Tier structs representing different price tiers in Sale.
+     */
+    Tier[3] public tiers;
+    uint256[3] public tiersDeposited;
+
+    /**
+     * @dev Sale stages timestamps.
+     */
+    SaleSchedule public saleSchedule;
+
+    /**
+     * @dev Sale constraints for each wallet.
+     */
+    SaleParameters public saleParameters;
+
+    /// Tracking the sale
+
+    /**
+     * @dev Total amount of USD collected so far.
+     */
+    uint256 public totalFundsCollected;
+
+    /**
+     * @dev Mapping to track deposits by each user.
+     */
+    mapping(address => UserDepositInfo) public userDeposits;
 
     /**
      * @dev Modifier to ensure that the current stage matches the required stage for the function execution.
@@ -223,49 +151,31 @@ contract PublicSale is AccessControl, Pausable {
         _;
     }
 
-    /*//////////////////////////////////////////////////////////////
-                            CONSTRUCTOR
-    //////////////////////////////////////////////////////////////*/
-
-    constructor(
-        address _superAdmin,
-        address _admin,
-        address _operator,
-        address _treasury,
-        IERC20 _usdc,
-        IERC20 _usdt,
-        bytes32 _merkleRoot
-    ) {
+    constructor(address _superAdmin, address _admin, address _operator, address _treasury, IERC20 _usdc) {
         address ZERO_ADDRESS = address(0);
 
         require(
             (_superAdmin != ZERO_ADDRESS) && (_admin != ZERO_ADDRESS) && (_operator != ZERO_ADDRESS)
-                && (_treasury != ZERO_ADDRESS) && (address(_usdc) != ZERO_ADDRESS) && (address(_usdt) != ZERO_ADDRESS)
-                && (_merkleRoot != bytes32(0))
+                && (_treasury != ZERO_ADDRESS) && (address(_usdc) != ZERO_ADDRESS)
         );
 
         _pause();
 
         treasury = _treasury;
         USDC = _usdc;
-        USDT = _usdt;
-        emit ExternalContractsSet(msg.sender, treasury, USDC, USDT);
-
-        _setMerkleRoot(_merkleRoot);
+        emit ExternalContractsSet(msg.sender, treasury, USDC);
 
         // Tier prices are scaled by 10^18 to keep precision during division
         _setTiers(
             [
-                Tier(9090909090909090, 2_000_000e6), // 0
-                Tier(9523809523809520, 4_000_000e6), // 1
-                Tier(9708737864077669, 6_000_000e6), // 2
-                Tier(10263929618768321, 20_000_000e6) // 3
+                Tier(120000000000000000, 2_000_000e6, 540 days), // 0
+                Tier(160000000000000000, 4_000_000e6, 360 days), // 1
+                Tier(180000000000000000, 8_000_000e6, 180 days) // 2
             ]
         );
 
         _grantRole(DEFAULT_ADMIN_ROLE, _superAdmin);
         _grantRole(ADMIN_ROLE, _admin);
-        _grantRole(OPERATOR_ROLE, _operator);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -293,19 +203,19 @@ contract PublicSale is AccessControl, Pausable {
     /**
      * @notice Sets the sale schedule including KYC and token purchase periods.
      * @dev This function can only be called by an account with the ADMIN_ROLE and when the contract is paused.
-     * @param _onlyKyc The timestamp until which users can only KYC.
-     * @param _tokenPurchase The timestamp until which token purchases can be made.
+     * @param _tokenPurchaseStart The timestamp until which users can start purchasing.
+     * @param _tokenPurchaseEnd The timestamp until which token purchases can be made.
      * Emits a {SaleScheduleUpdate} event.
      */
-    function setSaleSchedule(uint256 _comingSoon, uint256 _onlyKyc, uint256 _tokenPurchase)
+    function setSaleSchedule(uint256 _tokenPurchaseStart, uint256 _tokenPurchaseEnd)
         external
         whenPaused
         onlyRole(ADMIN_ROLE)
     {
-        require((_comingSoon < _onlyKyc) && (_onlyKyc < _tokenPurchase));
+        require((_tokenPurchaseStart < _tokenPurchaseEnd));
 
-        saleSchedule = SaleSchedule(_comingSoon, _onlyKyc, _tokenPurchase);
-        emit SaleScheduleUpdate(msg.sender, _comingSoon, _onlyKyc, _tokenPurchase);
+        saleSchedule = SaleSchedule(_tokenPurchaseStart, _tokenPurchaseEnd);
+        emit SaleScheduleUpdate(msg.sender, _tokenPurchaseStart, _tokenPurchaseEnd);
     }
 
     /**
@@ -314,7 +224,7 @@ contract PublicSale is AccessControl, Pausable {
      * @param _tiers An array of Tier structs representing the different tiers.
      * Emits a {TiersUpdate} event.
      */
-    function setTiers(Tier[4] calldata _tiers) public atStage(Stages.OnlyKyc) onlyRole(ADMIN_ROLE) {
+    function setTiers(Tier[3] calldata _tiers) public atStage(Stages.ComingSoon) onlyRole(ADMIN_ROLE) {
         bytes32 tiersHash_ = keccak256(bytes.concat(msg.data[4:]));
         bytes32 zeroBytesHash_ = keccak256(bytes.concat(new bytes(256)));
         require(tiersHash_ != zeroBytesHash_);
@@ -329,54 +239,25 @@ contract PublicSale is AccessControl, Pausable {
     /**
      * @notice Deposit using USDC and purchase tokens.
      * @param _amount Amount of USDC to deposit.
-     * @param merkleProof Merkle proof for whitelist verification.
+     * @param _tierIndex Tier index to purchase.
      * @dev Emits a Purchase event upon successful purchase.
      */
-    function depositUSDC(uint256 _amount, bytes32[] calldata merkleProof)
-        external
-        whenNotPaused
-        fromStage(Stages.TokenPurchase)
-    {
+    function depositUSDC(uint256 _amount, uint256 _tierIndex) external whenNotPaused atStage(Stages.TokenPurchase) {
         UserDepositInfo storage userDepositInfo = userDeposits[msg.sender];
 
-        _verifyDepositConditions(_amount, userDepositInfo.amountDeposited, merkleProof);
-        _purchase(_amount, USDC, userDepositInfo);
+        _verifyDepositConditions(_amount, userDepositInfo.amountDeposited);
+        _purchase(_amount, USDC, userDepositInfo, _tierIndex);
     }
 
     /**
-     * @notice Deposit using USDT and purchase tokens.
-     * @param _amount Amount of USDT to deposit.
-     * @param merkleProof Merkle proof for whitelist verification.
-     * @dev Emits a Purchase event upon successful purchase.
-     */
-    function depositUSDT(uint256 _amount, bytes32[] calldata merkleProof)
-        external
-        whenNotPaused
-        fromStage(Stages.TokenPurchase)
-    {
-        UserDepositInfo storage userDepositInfo = userDeposits[msg.sender];
-
-        _verifyDepositConditions(_amount, userDepositInfo.amountDeposited, merkleProof);
-        _purchase(_amount, USDT, userDepositInfo);
-    }
-
-    /**
-     * @notice Update the Merkle root for whitelist verification.
-     * @param _newRoot The new Merkle root.
-     */
-    function setMerkleRoot(bytes32 _newRoot) external onlyRole(OPERATOR_ROLE) fromStage(Stages.OnlyKyc) {
-        _setMerkleRoot(_newRoot);
-    }
-
-    /**
-     * @notice Withdraw assets from the contract.
+     * @notice Recover assets from the contract.
      * @param recipient Address to send the assets to.
-     * @param asset Address of the asset to withdraw (e.g., USDC/USDT).
+     * @param asset Address of the asset to withdraw (e.g., USDC).
      */
-    function withdrawAssets(address recipient, IERC20 asset) external onlyRole(ADMIN_ROLE) {
+    function recoverAssets(address recipient, IERC20 asset) external onlyRole(ADMIN_ROLE) {
         uint256 contractBalance = asset.balanceOf(address(this));
         asset.safeTransfer(recipient, contractBalance);
-        emit WithdrawAsset(address(asset), recipient, contractBalance);
+        emit RecoverAsset(address(asset), recipient, contractBalance);
     }
 
     /**
@@ -400,29 +281,28 @@ contract PublicSale is AccessControl, Pausable {
     /**
      * @notice Internal function to handle the purchase logic.
      * @param _amountUSD Amount to deposit.
-     * @param _asset Asset to deposit (USDC/USDT).
+     * @param _asset Asset to deposit (USDC).
      * @param _userDepositInfo User deposit info.
+     * @param _tierIndex Tier index to purchase.
      * @dev Emits a Purchase event upon successful purchase.
      */
-    function _purchase(uint256 _amountUSD, IERC20 _asset, UserDepositInfo storage _userDepositInfo) private {
-        (uint256 _resultingTokens, uint256 _remainingAmount, uint256 _resultingTierIndex) =
-            _calculateTokensToTransfer(_amountUSD, totalFundsCollected, activeTierIndex, tiers);
+    function _purchase(uint256 _amountUSD, IERC20 _asset, UserDepositInfo storage _userDepositInfo, uint256 _tierIndex)
+        private
+    {
+        (uint256 _purchasedTokens, uint256 _remainingAmount) =
+            _calculateTokensToTransfer(_amountUSD, _tierIndex, tiers, tiersDeposited);
 
         uint256 depositedAmount_ = _amountUSD - _remainingAmount;
 
-        if (_resultingTierIndex > activeTierIndex) {
-            emit ActiveTierUpdate(msg.sender, activeTierIndex, _resultingTierIndex);
-            activeTierIndex = _resultingTierIndex;
-        }
-
         totalFundsCollected += depositedAmount_;
+        tiersDeposited[_tierIndex] += depositedAmount_;
 
         _userDepositInfo.amountDeposited += depositedAmount_;
-        _userDepositInfo.purchasedTokens += _resultingTokens;
+        _userDepositInfo.purchasedTokens += _purchasedTokens;
 
         _asset.safeTransferFrom(msg.sender, treasury, depositedAmount_);
-
-        emit TokensPurchase(msg.sender, depositedAmount_, _resultingTokens, totalFundsCollected);
+        _setVestingHook(msg.sender, _purchasedTokens, tiers[_tierIndex].vesting);
+        emit TokensPurchase(msg.sender, depositedAmount_, _purchasedTokens, totalFundsCollected);
 
         if (_getRemainingCap() == 0) {
             _pause();
@@ -434,47 +314,27 @@ contract PublicSale is AccessControl, Pausable {
      * @notice Internal function to verify deposit conditions like minimum/maximum amount and whitelist.
      * @param _amount Amount to deposit.
      * @param _amountDeposited Amount already deposited by the user.
-     * @param merkleProof Merkle proof for whitelist verification.
      * @dev Throws custom errors if any condition fails.
      */
-    function _verifyDepositConditions(uint256 _amount, uint256 _amountDeposited, bytes32[] calldata merkleProof)
-        private
-        view
-    {
+    function _verifyDepositConditions(uint256 _amount, uint256 _amountDeposited) private view {
         if (_amount < 10e6) {
-            revert InvalidPurchaseInput(msg.sig, bytes32("_amount"), bytes32("at least"), 10e6);
-        }
-
-        if (!_verifyUser(msg.sender, merkleProof)) {
-            revert UserNotVerified(msg.sig, msg.sender);
+            revert InvalidPurchaseInputHandler(msg.sig, bytes32("_amount"), bytes32("at least"), 10e6);
         }
 
         SaleParameters memory _saleParameters = saleParameters;
 
         if ((_amount + _amountDeposited) < _saleParameters.minDepositAmount) {
-            revert InvalidPurchaseInput(
+            revert InvalidPurchaseInputHandler(
                 msg.sig, bytes32("_amount"), bytes32("below minDepositAmount"), _saleParameters.minDepositAmount
             );
         }
 
         uint256 _remainingAmount = _saleParameters.maxDepositAmount - _amountDeposited;
         if (_amount > _remainingAmount) {
-            revert InvalidPurchaseInput(
+            revert InvalidPurchaseInputHandler(
                 msg.sig, bytes32("_amount"), bytes32("exceeds maxDepositAmount"), _remainingAmount
             );
         }
-    }
-
-    /**
-     * @notice Internal function to set the Merkle root.
-     * @param _newRoot The new Merkle root.
-     * @dev Emits a {MerkleRootUpdate} event if the new root is set.
-     */
-    function _setMerkleRoot(bytes32 _newRoot) private {
-        if ((_newRoot == bytes32(0)) || (_newRoot == merkleRoot)) revert InvalidInput(msg.sig, bytes32("_newRoot"));
-
-        merkleRoot = _newRoot;
-        emit MerkleRootUpdate(msg.sender, _newRoot);
     }
 
     /**
@@ -482,84 +342,46 @@ contract PublicSale is AccessControl, Pausable {
      * @param _tiers An array of Tier structs representing the different tiers.
      * @dev Emits a {TiersUpdate} event if the new tiers are set.
      */
-    function _setTiers(Tier[4] memory _tiers) private {
+    function _setTiers(Tier[3] memory _tiers) private {
         for (uint256 i = 0; i < 4; i++) {
             tiers[i] = _tiers[i];
+            maxTotalFunds += _tiers[i].cap;
         }
 
-        maxTotalFunds = _tiers[3].cap;
-
         emit TiersUpdate(msg.sender, _tiers);
-    }
-
-    /**
-     * @notice Internal function to verify if a user is in the whitelist using Merkle proof.
-     * @param user Address of the user.
-     * @param merkleProof Merkle proof for whitelist verification.
-     * @return A boolean indicating whether the user is in the whitelist.
-     */
-    function _verifyUser(address user, bytes32[] calldata merkleProof) private view returns (bool) {
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user))));
-
-        return MerkleProof.verify(merkleProof, merkleRoot, leaf);
+        emit MaxTotalFundsUpdate(msg.sender, maxTotalFunds);
     }
 
     /**
      * @notice Calculates the number of tokens to transfer based on the deposited amount and tiers.
      * @dev This function accounts for multiple tiers and computes tokens across them if necessary.
      * @param _amount The amount deposited by the user.
-     * @param _totalFundsCollected The total funds collected so far.
-     * @param _activeTierIndex The index of the current active tier.
+     * @param _tierIndex The index tier to purchase.
      * @param _tiers An array containing the details of each tier.
      * @return A tuple containing:
-     *         - `resultingTokens_` The total number of tokens to transfer.
+     *         - `resultingTokens_` The total number of tokens purchased.
      *         - `remainingAmount_` The remaining amount after token computation.
-     *         - `resultingTierIndex_` The updated active tier index after processing.
      */
     function _calculateTokensToTransfer(
         uint256 _amount,
-        uint256 _totalFundsCollected,
-        uint256 _activeTierIndex,
-        Tier[4] memory _tiers
-    ) private pure returns (uint256, uint256, uint256) {
-        Tier memory _tier = _tiers[_activeTierIndex];
-        uint256 _remainingTierCap = _tier.cap - _totalFundsCollected;
+        uint256 _tierIndex,
+        Tier[3] memory _tiers,
+        uint256[3] memory _tiersDeposited
+    ) private pure returns (uint256, uint256) {
+        Tier memory _tier = _tiers[_tierIndex];
+        uint256 _remainingTierCap = _tier.cap - _tiersDeposited[_tierIndex];
+
+        if (_remainingTierCap == 0) {
+            revert InvalidPurchaseInput(this.depositUSDC.selector, "_tierIndex", "tier cap reached");
+        }
 
         // If amount is within the current tier cap we don't need to split the price into multiple tiers
         if (_amount <= _remainingTierCap) {
-            return (_computeTokens(_amount, _tier.price), 0, _activeTierIndex);
+            return (_computeTokens(_amount, _tier.price), 0);
+        } else {
+            uint256 _remainingAmount = _amount - _remainingTierCap;
+            return (_computeTokens(_remainingTierCap, _tier.price), _remainingAmount);
         }
-
-        // We're starting to compute the resulting tokens from the current tier
-        uint256 remainingAmount_ = _amount;
-        uint256 resultingTokens_ = 0;
-        uint256 resultingTierIndex_ = _activeTierIndex;
-
-        // By this point we know the amount is larger than the remaining tier cap
-        resultingTokens_ += _computeTokens(_remainingTierCap, _tier.price);
-        remainingAmount_ -= _remainingTierCap;
-
-        uint256 prevTierCap = _tier.cap;
-        uint256 currTierCap = 0;
-
-        // And we continue to compute the resulting tokens based on the next tiers prices
-        for (uint256 i = (_activeTierIndex + 1); i < _tiers.length; i++) {
-            _tier = _tiers[i];
-            resultingTierIndex_ = i;
-            currTierCap = _tier.cap - prevTierCap;
-
-            if (remainingAmount_ <= currTierCap) {
-                resultingTokens_ += _computeTokens(remainingAmount_, _tier.price);
-                remainingAmount_ = 0;
-                break;
-            }
-
-            resultingTokens_ += _computeTokens(currTierCap, _tier.price);
-            remainingAmount_ -= currTierCap;
-            prevTierCap = _tier.cap;
-        }
-
-        return (resultingTokens_, remainingAmount_, resultingTierIndex_);
     }
 
     /**
@@ -579,14 +401,12 @@ contract PublicSale is AccessControl, Pausable {
      * @dev Evaluates the current timestamp against the predefined sale schedule stages.
      * @return The current stage which can be one of the stages:
      *         - `Stages.ComingSoon`: Sale has not started yet.
-     *         - `Stages.OnlyKyc`: Only KYC available, purchase not yet allowed.
      *         - `Stages.TokenPurchase`: Sale is active, allowing token purchases.
      *         - `Stages.Completed`: Sale has ended.
      */
     function _getCurrentStage() private view returns (Stages) {
-        if (block.timestamp < saleSchedule.comingSoon) return Stages.ComingSoon;
-        if (block.timestamp < saleSchedule.onlyKyc) return Stages.OnlyKyc;
-        if (block.timestamp < saleSchedule.tokenPurchase) return Stages.TokenPurchase;
+        if (block.timestamp < saleSchedule.start) return Stages.ComingSoon;
+        if (block.timestamp < saleSchedule.end) return Stages.TokenPurchase;
 
         return Stages.Completed;
     }
@@ -599,6 +419,16 @@ contract PublicSale is AccessControl, Pausable {
      */
     function _getRemainingCap() private view returns (uint256) {
         return maxTotalFunds - totalFundsCollected;
+    }
+
+    /**
+     * @notice Set the stream hook for the user.
+     * @param _user Address of the user.
+     * @param _amount Amount of tokens to stream.
+     * @param _vesting Vesting time for the tokens.
+     */
+    function _setVestingHook(address _user, uint256 _amount, uint256 _vesting) private {
+        // Set stream hook
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -616,15 +446,6 @@ contract PublicSale is AccessControl, Pausable {
      */
     function getCurrentStage() external view returns (Stages) {
         return _getCurrentStage();
-    }
-
-    /**
-     * @notice Check if user able to deposit
-     * @param user Address of user
-     * @param merkleProof Proof for user
-     */
-    function verifyUser(address user, bytes32[] calldata merkleProof) external view returns (bool) {
-        return _verifyUser(user, merkleProof);
     }
 
     /**
