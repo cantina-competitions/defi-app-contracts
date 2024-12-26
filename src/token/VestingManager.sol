@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {IVestingManager} from "../interfaces/IVestingManager.sol";
+import {IVestingManager, VestParams, Vest} from "../interfaces/IVestingManager.sol";
 import {ITasker} from "../interfaces/ITasker.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";

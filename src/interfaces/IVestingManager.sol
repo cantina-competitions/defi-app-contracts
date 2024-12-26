@@ -3,6 +3,31 @@ pragma solidity ^0.8.0;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+struct VestParams {
+    IERC20 token;
+    address recipient;
+    uint32 start;
+    uint32 cliffDuration;
+    uint32 stepDuration;
+    uint32 steps;
+    uint128 stepPercentage;
+    uint128 amount;
+    string tokenURI;
+}
+
+struct Vest {
+    address owner;
+    IERC20 token;
+    uint32 start;
+    uint32 cliffDuration;
+    uint32 stepDuration;
+    uint32 steps;
+    uint128 cliffShares;
+    uint128 stepShares;
+    uint128 claimed;
+    string tokenURI;
+}
+
 interface IVestingManager {
     function createVesting(VestParams calldata vestParams)
         external
@@ -15,31 +40,6 @@ interface IVestingManager {
     function vestBalance(uint256 vestId) external view returns (uint256);
 
     function updateOwner(uint256 vestId, address newOwner) external;
-
-    struct VestParams {
-        IERC20 token;
-        address recipient;
-        uint32 start;
-        uint32 cliffDuration;
-        uint32 stepDuration;
-        uint32 steps;
-        uint128 stepPercentage;
-        uint128 amount;
-        string tokenURI;
-    }
-
-    struct Vest {
-        address owner;
-        IERC20 token;
-        uint32 start;
-        uint32 cliffDuration;
-        uint32 stepDuration;
-        uint32 steps;
-        uint128 cliffShares;
-        uint128 stepShares;
-        uint128 claimed;
-        string tokenURI;
-    }
 
     event CreateVesting(
         uint256 indexed vestId,

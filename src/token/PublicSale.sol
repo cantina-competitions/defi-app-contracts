@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import {IVestingManager, VestParams} from "../interfaces/IVestingManager.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 /// @title PublicSale Contract
@@ -10,7 +11,7 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 /// @dev This contract allows users to deposit USDC and purchase tokens.
 /// Based on: https://etherscan.io/address/0xcfd9cb8f15a9732bc449b05d97c29244de2259b2#code
 /// @author security@defi.app
-contract PublicSale is AccessControl, Pausable {
+contract PublicSale is Ownable, Pausable {
     using SafeERC20 for IERC20;
 
     /**
@@ -47,7 +48,7 @@ contract PublicSale is AccessControl, Pausable {
 
     }
 
-    event ExternalContractsSet(address indexed user, address treasury, IERC20 usdc);
+    event ExternalContractsSet(address indexed user, address treasury, IERC20 usdc, address vestingContract);
     event TiersUpdate(address indexed user, Tier[3] tiers);
     event MaxTotalFundsUpdate(address indexed user, uint256 maxTotalFunds);
     event SaleParametersUpdate(address indexed user, uint256 minDepositAmount, uint256 maxDepositAmount);
@@ -90,16 +91,18 @@ contract PublicSale is AccessControl, Pausable {
      */
     error WrongStage(bytes4 _selector, Stages _currentStage, Stages _requiredStage);
 
-    /**
-     * @dev Admin Role: Manages contract parameters setup like sale configuration and recipient of funds
-     */
-    bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    uint256 public constant PERCENTAGE_PRECISION = 1e18;
 
     /**
      * @notice Maximum funds allowed to be collected.
      * @dev 20,000,000 USDC(*) times 10^6, 6 is the number of decimals of USDC.
      */
     uint256 public maxTotalFunds;
+
+    /**
+     * @dev Address of the token being sold.
+     */
+    IERC20 public immutable saleToken;
 
     /**
      * @dev Recipient of collected funds.
@@ -110,6 +113,11 @@ contract PublicSale is AccessControl, Pausable {
      * @dev Address of USDC token.
      */
     IERC20 private immutable USDC;
+
+    /**
+     * @notice  Address of the vesting contract.
+     */
+    address public immutable vestingContract;
 
     /**
      * @dev Array of Tier structs representing different price tiers in Sale.
@@ -154,19 +162,23 @@ contract PublicSale is AccessControl, Pausable {
         _;
     }
 
-    constructor(address _superAdmin, address _admin, address _operator, address _treasury, IERC20 _usdc) {
+    constructor(IERC20 _saleToken, address _admin, address _treasury, IERC20 _usdc, address _vestingContract)
+        Ownable(_admin)
+    {
         address ZERO_ADDRESS = address(0);
 
         require(
-            (_superAdmin != ZERO_ADDRESS) && (_admin != ZERO_ADDRESS) && (_operator != ZERO_ADDRESS)
-                && (_treasury != ZERO_ADDRESS) && (address(_usdc) != ZERO_ADDRESS)
+            (address(_saleToken) != ZERO_ADDRESS) && (_treasury != ZERO_ADDRESS) && (address(_usdc) != ZERO_ADDRESS)
+                && (_vestingContract != ZERO_ADDRESS)
         );
 
         _pause();
 
+        saleToken = _saleToken;
         treasury = _treasury;
         USDC = _usdc;
-        emit ExternalContractsSet(msg.sender, treasury, USDC);
+        vestingContract = _vestingContract;
+        emit ExternalContractsSet(msg.sender, treasury, USDC, vestingContract);
 
         // Tier prices are scaled by 10^18 to keep precision during division
         _setTiers(
@@ -176,9 +188,6 @@ contract PublicSale is AccessControl, Pausable {
                 Tier(180000000000000000, 8_000_000e6, 180 days) // 2
             ]
         );
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _superAdmin);
-        _grantRole(ADMIN_ROLE, _admin);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -187,16 +196,12 @@ contract PublicSale is AccessControl, Pausable {
 
     /**
      * @notice Sets the sale parameters including minimum and maximum deposit amounts.
-     * @dev This function can only be called by an account with the ADMIN_ROLE and when the contract is paused.
+     * @dev This function can only be called by an account with the DEFAULT_ADMIN_ROLE and when the contract is paused.
      * @param _minDepositAmount The minimum amount that can be deposited.
      * @param _maxDepositAmount The maximum amount that can be deposited.
      * Emits a {SaleParametersUpdate} event.
      */
-    function setSaleParameters(uint256 _minDepositAmount, uint256 _maxDepositAmount)
-        external
-        whenPaused
-        onlyRole(ADMIN_ROLE)
-    {
+    function setSaleParameters(uint256 _minDepositAmount, uint256 _maxDepositAmount) external whenPaused onlyOwner {
         require(_minDepositAmount < _maxDepositAmount);
 
         saleParameters = SaleParameters(_minDepositAmount, _maxDepositAmount);
@@ -205,16 +210,12 @@ contract PublicSale is AccessControl, Pausable {
 
     /**
      * @notice Sets the sale schedule including KYC and token purchase periods.
-     * @dev This function can only be called by an account with the ADMIN_ROLE and when the contract is paused.
+     * @dev This function can only be called by an account with the DEFAULT_ADMIN_ROLE and when the contract is paused.
      * @param _tokenPurchaseStart The timestamp until which users can start purchasing.
      * @param _tokenPurchaseEnd The timestamp until which token purchases can be made.
      * Emits a {SaleScheduleUpdate} event.
      */
-    function setSaleSchedule(uint256 _tokenPurchaseStart, uint256 _tokenPurchaseEnd)
-        external
-        whenPaused
-        onlyRole(ADMIN_ROLE)
-    {
+    function setSaleSchedule(uint256 _tokenPurchaseStart, uint256 _tokenPurchaseEnd) external whenPaused onlyOwner {
         require((_tokenPurchaseStart < _tokenPurchaseEnd));
 
         saleSchedule = SaleSchedule(_tokenPurchaseStart, _tokenPurchaseEnd);
@@ -223,11 +224,11 @@ contract PublicSale is AccessControl, Pausable {
 
     /**
      * @notice Sets the tiers for the sale.
-     * @dev This function can only be called by an account with the ADMIN_ROLE and when the contract is paused.
+     * @dev This function can only be called by an account with the DEFAULT_ADMIN_ROLE and when the contract is paused.
      * @param _tiers An array of Tier structs representing the different tiers.
      * Emits a {TiersUpdate} event.
      */
-    function setTiers(Tier[3] calldata _tiers) public atStage(Stages.ComingSoon) onlyRole(ADMIN_ROLE) {
+    function setTiers(Tier[3] calldata _tiers) public atStage(Stages.ComingSoon) onlyOwner {
         bytes32 tiersHash_ = keccak256(bytes.concat(msg.data[4:]));
         bytes32 zeroBytesHash_ = keccak256(bytes.concat(new bytes(256)));
         require(tiersHash_ != zeroBytesHash_);
@@ -257,7 +258,7 @@ contract PublicSale is AccessControl, Pausable {
      * @param recipient Address to send the assets to.
      * @param asset Address of the asset to withdraw (e.g., USDC).
      */
-    function recoverAssets(address recipient, IERC20 asset) external onlyRole(ADMIN_ROLE) {
+    function recoverAssets(address recipient, IERC20 asset) external onlyOwner {
         uint256 contractBalance = asset.balanceOf(address(this));
         asset.safeTransfer(recipient, contractBalance);
         emit RecoverAsset(address(asset), recipient, contractBalance);
@@ -266,14 +267,14 @@ contract PublicSale is AccessControl, Pausable {
     /**
      * @notice Pause the contract, preventing deposits.
      */
-    function pause() external onlyRole(ADMIN_ROLE) {
+    function pause() external onlyOwner {
         _pause();
     }
 
     /**
      * @notice Unpause the contract, allowing deposits.
      */
-    function unpause() external onlyRole(ADMIN_ROLE) {
+    function unpause() external onlyOwner {
         _unpause();
     }
 
@@ -425,13 +426,29 @@ contract PublicSale is AccessControl, Pausable {
     }
 
     /**
-     * @notice Set the stream hook for the user.
+     * @notice Set the vesting for the user.
      * @param _user Address of the user.
-     * @param _amount Amount of tokens to stream.
+     * @param _amount Amount of tokens to vest.
      * @param _vesting Vesting time for the tokens.
      */
     function _setVestingHook(address _user, uint256 _amount, uint256 _vesting) private {
-        // Set stream hook
+        saleToken.safeTransferFrom(treasury, address(this), _amount);
+        saleToken.forceApprove(vestingContract, _amount);
+        uint32 numberOfSteps = uint32(_vesting) / 30 days;
+        uint128 stepPercentage = uint128(PERCENTAGE_PRECISION / numberOfSteps);
+        IVestingManager(vestingContract).createVesting(
+            VestParams({
+                token: saleToken,
+                recipient: _user,
+                start: uint32(saleSchedule.end),
+                cliffDuration: 0,
+                stepDuration: uint32(_vesting),
+                steps: numberOfSteps,
+                stepPercentage: stepPercentage,
+                amount: uint128(_amount),
+                tokenURI: ""
+            })
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
