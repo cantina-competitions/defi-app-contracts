@@ -6,6 +6,9 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 /// @title PublicSale Contract
+/// @notice Contract for the public sale of tokens.
+/// @dev This contract allows users to deposit USDC and purchase tokens.
+/// Based on: https://etherscan.io/address/0xcfd9cb8f15a9732bc449b05d97c29244de2259b2#code
 /// @author security@defi.app
 contract PublicSale is AccessControl, Pausable {
     using SafeERC20 for IERC20;
