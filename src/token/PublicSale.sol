@@ -19,7 +19,13 @@ contract PublicSale is Ownable, Pausable {
      */
     struct UserDepositInfo {
         uint256 amountDeposited; // Total amount deposited by the user
+        bool claimed; // Whether the user has claimed the tokens
+        Purchase[] purchases; // Total user Purchases
+    }
+
+    struct Purchase {
         uint256 purchasedTokens; // Total tokens purchased by the user
+        uint256 vesting; // Vesting time for the tokens
     }
 
     /**
@@ -44,7 +50,8 @@ contract PublicSale is Ownable, Pausable {
     enum Stages {
         Completed, // Sale is final
         ComingSoon, // Contract is deployed but not yet started
-        TokenPurchase // Deposit and purchase tokens
+        TokenPurchase, // Deposit and purchase tokens
+        ClaimAndVest // Claim and start vesting
 
     }
 
@@ -52,20 +59,23 @@ contract PublicSale is Ownable, Pausable {
     event TiersUpdate(address indexed user, Tier[3] tiers);
     event MaxTotalFundsUpdate(address indexed user, uint256 maxTotalFunds);
     event SaleParametersUpdate(address indexed user, uint256 minDepositAmount, uint256 maxDepositAmount);
-    event SaleTokenUpdate(address indexed user, address saleToken);
+    event VestingReadyUpdate(address indexed user, address saleToken, uint32 vestingStart);
     event SaleScheduleUpdate(address indexed user, uint256 comingSoon, uint256 tokenPurchase);
     event TokensPurchase(
-        address indexed user, uint256 depositedAmount, uint256 purchasedTokens, uint256 totalFundsCollected
+        address indexed user,
+        uint256 depositedAmount,
+        uint256 purchasedTokens,
+        uint256 vesting,
+        uint256 totalFundsCollected
     );
     event SaleCompleted();
     event RecoverAsset(address asset, address withdrawTo, uint256 amount);
 
     /**
-     * @dev Error thrown when a user is not verified.
-     * @param _selector The function selector that triggered the error.
-     * @param _user The address of the user that is not verified.
+     * @dev Error thrown when a user has already claimed their tokens.
+     * @param _user The address of the user
      */
-    error UserNotVerified(bytes4 _selector, address _user);
+    error UserHasClaimed(address _user);
 
     /**
      * @dev Error indicating that the purchase input is invalid.
@@ -130,6 +140,11 @@ contract PublicSale is Ownable, Pausable {
      * @notice  Address of the vesting contract.
      */
     address public immutable vestingContract;
+
+    /**
+     * @dev Vesting start timestamp.
+     */
+    uint32 public vestingStart;
 
     /**
      * @dev Array of Tier structs representing different price tiers in Sale.
@@ -256,20 +271,28 @@ contract PublicSale is Ownable, Pausable {
     /**
      * @notice Set the sale token.
      * @param _saleToken Address of the token to be sold.
+     * @param _vestingStart UNIX timestamp of the vesting start.
      * @dev This function can only be called by `owner` and only once.
      */
-    function setSaleToken(IERC20 _saleToken) external onlyOwner {
+    function setVestingReady(IERC20 _saleToken, uint32 _vestingStart) external onlyOwner atStage(Stages.Completed) {
         require(
             address(saleToken) == address(0),
-            AlreadySet(this.setSaleToken.selector, bytes32(uint256(uint160(address(_saleToken)))))
+            AlreadySet(this.setVestingReady.selector, bytes32(uint256(uint160(address(_saleToken)))))
         );
-        require(address(_saleToken) != address(0), InvalidInput(this.setSaleToken.selector, bytes32(uint256(0))));
+        require(address(_saleToken) != address(0), InvalidInput(this.setVestingReady.selector, bytes32(uint256(0))));
+        require(
+            _vestingStart > block.timestamp,
+            InvalidInput(this.setVestingReady.selector, bytes32(uint256(_vestingStart)))
+        );
+
         saleToken = _saleToken;
-        emit SaleTokenUpdate(msg.sender, address(saleToken));
+        vestingStart = _vestingStart;
+
+        emit VestingReadyUpdate(msg.sender, address(saleToken), vestingStart);
     }
 
     /**
-     * @notice Set the vesting for a user.
+     * @notice Admin authorized method to set the vesting for a user.
      * @param _user Address of the user.
      * @param _amount Amount of tokens to vest.
      * @param _vestingTime Vesting time for the tokens.
@@ -296,8 +319,28 @@ contract PublicSale is Ownable, Pausable {
     function depositUSDC(uint256 _amount, uint256 _tierIndex) external whenNotPaused atStage(Stages.TokenPurchase) {
         UserDepositInfo storage userDepositInfo = userDeposits[msg.sender];
 
+        if (userDepositInfo.purchases.length == 0) {
+            Purchase[] memory purchases = new Purchase[](MAX_TIERS);
+            userDepositInfo.purchases = purchases;
+        }
+
         _verifyDepositConditions(_amount, userDepositInfo.amountDeposited);
         _purchase(_amount, userDepositInfo, _tierIndex);
+    }
+
+    /**
+     * @notice Claim and start vesting for users who have already deposited.
+     * @dev This function can only be called when the sale is completed and the contract is in the ClaimAndVest stage.
+     */
+    function claimAndStartVesting() external atStage(Stages.ClaimAndVest) {
+        UserDepositInfo storage userDepositInfo = userDeposits[msg.sender];
+        require(!userDepositInfo.claimed, UserHasClaimed(msg.sender));
+        userDepositInfo.claimed = true;
+
+        for (uint256 i = 0; i < userDepositInfo.purchases.length; i++) {
+            Purchase memory purchase = userDepositInfo.purchases[i];
+            _setVestingHook(msg.sender, purchase.purchasedTokens, purchase.vesting, vestingStart);
+        }
     }
 
     /**
@@ -346,11 +389,16 @@ contract PublicSale is Ownable, Pausable {
         tiersDeposited[_tierIndex] += depositedAmount_;
 
         _userDepositInfo.amountDeposited += depositedAmount_;
-        _userDepositInfo.purchasedTokens += _purchasedTokens;
+        _userDepositInfo.purchases[_tierIndex].purchasedTokens += _purchasedTokens;
+
+        uint256 vestingTime = tiers[_tierIndex].vesting;
+        if (_userDepositInfo.purchases[_tierIndex].vesting != vestingTime) {
+            _userDepositInfo.purchases[_tierIndex].vesting = vestingTime;
+        }
 
         USDC.safeTransferFrom(msg.sender, treasury, depositedAmount_);
 
-        emit TokensPurchase(msg.sender, depositedAmount_, _purchasedTokens, totalFundsCollected);
+        emit TokensPurchase(msg.sender, depositedAmount_, _purchasedTokens, vestingTime, totalFundsCollected);
 
         if (_getRemainingCap() == 0) {
             _pause();
@@ -452,10 +500,12 @@ contract PublicSale is Ownable, Pausable {
      *         - `Stages.ComingSoon`: Sale has not started yet.
      *         - `Stages.TokenPurchase`: Sale is active, allowing token purchases.
      *         - `Stages.Completed`: Sale has ended.
+     *        - `Stages.ClaimAndVest`: Sale has ended and users can claim and start vesting.
      */
     function _getCurrentStage() private view returns (Stages) {
         if (block.timestamp < saleSchedule.start) return Stages.ComingSoon;
         if (block.timestamp < saleSchedule.end) return Stages.TokenPurchase;
+        if (vestingStart != 0) return Stages.ClaimAndVest;
 
         return Stages.Completed;
     }
