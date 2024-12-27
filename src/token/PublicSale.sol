@@ -320,8 +320,9 @@ contract PublicSale is Ownable, Pausable {
         UserDepositInfo storage userDepositInfo = userDeposits[msg.sender];
 
         if (userDepositInfo.purchases.length == 0) {
-            Purchase[] memory purchases = new Purchase[](MAX_TIERS);
-            userDepositInfo.purchases = purchases;
+            for (uint256 i = 0; i < MAX_TIERS; i++) {
+                userDepositInfo.purchases.push(Purchase(0, tiers[i].vesting));
+            }
         }
 
         _verifyDepositConditions(_amount, userDepositInfo.amountDeposited);
@@ -337,9 +338,11 @@ contract PublicSale is Ownable, Pausable {
         require(!userDepositInfo.claimed, UserHasClaimed(msg.sender));
         userDepositInfo.claimed = true;
 
-        for (uint256 i = 0; i < userDepositInfo.purchases.length; i++) {
+        for (uint256 i = 0; i < MAX_TIERS; i++) {
             Purchase memory purchase = userDepositInfo.purchases[i];
-            _setVestingHook(msg.sender, purchase.purchasedTokens, purchase.vesting, vestingStart);
+            if (purchase.purchasedTokens > 0) {
+                _setVestingHook(msg.sender, purchase.purchasedTokens, purchase.vesting, vestingStart);
+            }
         }
     }
 
@@ -391,10 +394,7 @@ contract PublicSale is Ownable, Pausable {
         _userDepositInfo.amountDeposited += depositedAmount_;
         _userDepositInfo.purchases[_tierIndex].purchasedTokens += _purchasedTokens;
 
-        uint256 vestingTime = tiers[_tierIndex].vesting;
-        if (_userDepositInfo.purchases[_tierIndex].vesting != vestingTime) {
-            _userDepositInfo.purchases[_tierIndex].vesting = vestingTime;
-        }
+        uint256 vestingTime = _userDepositInfo.purchases[_tierIndex].vesting;
 
         USDC.safeTransferFrom(msg.sender, treasury, depositedAmount_);
 
