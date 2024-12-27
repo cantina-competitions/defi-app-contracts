@@ -297,7 +297,7 @@ contract PublicSale is Ownable, Pausable {
         UserDepositInfo storage userDepositInfo = userDeposits[msg.sender];
 
         _verifyDepositConditions(_amount, userDepositInfo.amountDeposited);
-        _purchase(_amount, USDC, userDepositInfo, _tierIndex);
+        _purchase(_amount, userDepositInfo, _tierIndex);
     }
 
     /**
@@ -331,19 +331,16 @@ contract PublicSale is Ownable, Pausable {
 
     /**
      * @notice Internal function to handle the purchase logic.
-     * @param _amountUSD Amount to deposit.
-     * @param _asset Asset to deposit (USDC).
+     * @param _amountUSDC Amount to deposit.
      * @param _userDepositInfo User deposit info.
      * @param _tierIndex Tier index to purchase.
      * @dev Emits a Purchase event upon successful purchase.
      */
-    function _purchase(uint256 _amountUSD, IERC20 _asset, UserDepositInfo storage _userDepositInfo, uint256 _tierIndex)
-        private
-    {
+    function _purchase(uint256 _amountUSDC, UserDepositInfo storage _userDepositInfo, uint256 _tierIndex) private {
         (uint256 _purchasedTokens, uint256 _remainingAmount) =
-            _calculateTokensToTransfer(_amountUSD, _tierIndex, tiers, tiersDeposited);
+            _calculateTokensToTransfer(_amountUSDC, _tierIndex, tiers, tiersDeposited);
 
-        uint256 depositedAmount_ = _amountUSD - _remainingAmount;
+        uint256 depositedAmount_ = _amountUSDC - _remainingAmount;
 
         totalFundsCollected += depositedAmount_;
         tiersDeposited[_tierIndex] += depositedAmount_;
@@ -351,8 +348,8 @@ contract PublicSale is Ownable, Pausable {
         _userDepositInfo.amountDeposited += depositedAmount_;
         _userDepositInfo.purchasedTokens += _purchasedTokens;
 
-        _asset.safeTransferFrom(msg.sender, treasury, depositedAmount_);
-        _setVestingHook(msg.sender, _purchasedTokens, tiers[_tierIndex].vesting);
+        USDC.safeTransferFrom(msg.sender, treasury, depositedAmount_);
+
         emit TokensPurchase(msg.sender, depositedAmount_, _purchasedTokens, totalFundsCollected);
 
         if (_getRemainingCap() == 0) {
