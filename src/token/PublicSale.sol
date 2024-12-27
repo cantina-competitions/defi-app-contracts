@@ -91,7 +91,11 @@ contract PublicSale is Ownable, Pausable {
      */
     error WrongStage(bytes4 _selector, Stages _currentStage, Stages _requiredStage);
 
-    uint256 public constant PERCENTAGE_PRECISION = 1e18;
+    uint32 public constant DEFAULT_STEP_DURATION = 30 days;
+
+    uint256 internal constant PERCENTAGE_PRECISION = 1e18;
+
+    uint256 internal constant MAX_TIERS = 3;
 
     /**
      * @notice Maximum funds allowed to be collected.
@@ -442,7 +446,7 @@ contract PublicSale is Ownable, Pausable {
                 recipient: _user,
                 start: uint32(saleSchedule.end),
                 cliffDuration: 0,
-                stepDuration: uint32(_vesting),
+                stepDuration: DEFAULT_STEP_DURATION,
                 steps: numberOfSteps,
                 stepPercentage: stepPercentage,
                 amount: uint128(_amount),
