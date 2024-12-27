@@ -134,8 +134,12 @@ contract PublicSale is Ownable, Pausable {
     /**
      * @dev Array of Tier structs representing different price tiers in Sale.
      */
-    Tier[3] public tiers;
-    uint256[3] public tiersDeposited;
+    Tier[MAX_TIERS] public tiers;
+
+    /**
+     * @dev Array of uint256 representing how much deposited on each tier.
+     */
+    uint256[MAX_TIERS] public tiersDeposited;
 
     /**
      * @dev Sale stages timestamps.
@@ -389,8 +393,9 @@ contract PublicSale is Ownable, Pausable {
      * @param _tiers An array of Tier structs representing the different tiers.
      * @dev Emits a {TiersUpdate} event if the new tiers are set.
      */
-    function _setTiers(Tier[3] memory _tiers) private {
-        for (uint256 i = 0; i < 4; i++) {
+    function _setTiers(Tier[MAX_TIERS] memory _tiers) private {
+        for (uint256 i = 0; i < MAX_TIERS; i++) {
+            _checkTierVestDuration(_tiers[i]);
             tiers[i] = _tiers[i];
             maxTotalFunds += _tiers[i].cap;
         }
@@ -466,6 +471,16 @@ contract PublicSale is Ownable, Pausable {
      */
     function _getRemainingCap() private view returns (uint256) {
         return maxTotalFunds - totalFundsCollected;
+    }
+
+    /**
+     * @notice Check if the vesting duration of a tier is a multiple of the default step duration.
+     * @param _tier to which vesting duration to check.
+     */
+    function _checkTierVestDuration(Tier memory _tier) private pure {
+        if (_tier.vesting % DEFAULT_STEP_DURATION != 0) {
+            revert InvalidInput(msg.sig, bytes32(_tier.vesting));
+        }
     }
 
     /**
