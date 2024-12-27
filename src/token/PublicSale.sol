@@ -52,6 +52,7 @@ contract PublicSale is Ownable, Pausable {
     event TiersUpdate(address indexed user, Tier[3] tiers);
     event MaxTotalFundsUpdate(address indexed user, uint256 maxTotalFunds);
     event SaleParametersUpdate(address indexed user, uint256 minDepositAmount, uint256 maxDepositAmount);
+    event SaleTokenUpdate(address indexed user, address saleToken);
     event SaleScheduleUpdate(address indexed user, uint256 comingSoon, uint256 tokenPurchase);
     event TokensPurchase(
         address indexed user, uint256 depositedAmount, uint256 purchasedTokens, uint256 totalFundsCollected
@@ -91,6 +92,13 @@ contract PublicSale is Ownable, Pausable {
      */
     error WrongStage(bytes4 _selector, Stages _currentStage, Stages _requiredStage);
 
+    /**
+     * @dev Error thrown when the sale has already been set.
+     * @param _selector The function selector that triggered the error.
+     * @param _input The input that was already set.
+     */
+    error AlreadySet(bytes4 _selector, bytes32 _input);
+
     uint32 public constant DEFAULT_STEP_DURATION = 30 days;
 
     uint256 internal constant PERCENTAGE_PRECISION = 1e18;
@@ -106,7 +114,7 @@ contract PublicSale is Ownable, Pausable {
     /**
      * @dev Address of the token being sold.
      */
-    IERC20 public immutable saleToken;
+    IERC20 public saleToken;
 
     /**
      * @dev Recipient of collected funds.
@@ -166,19 +174,20 @@ contract PublicSale is Ownable, Pausable {
         _;
     }
 
-    constructor(IERC20 _saleToken, address _admin, address _treasury, IERC20 _usdc, address _vestingContract)
-        Ownable(_admin)
-    {
+    /**
+     * @notice Constructor to set the sale parameters.
+     * @param _admin Address of the admin.
+     * @param _treasury Address of the treasury.(multisig)
+     * @param _usdc Address of the USDC token.
+     * @param _vestingContract Address of the vesting contract.
+     */
+    constructor(address _admin, address _treasury, IERC20 _usdc, address _vestingContract) Ownable(_admin) {
         address ZERO_ADDRESS = address(0);
 
-        require(
-            (address(_saleToken) != ZERO_ADDRESS) && (_treasury != ZERO_ADDRESS) && (address(_usdc) != ZERO_ADDRESS)
-                && (_vestingContract != ZERO_ADDRESS)
-        );
+        require((_treasury != ZERO_ADDRESS) && (address(_usdc) != ZERO_ADDRESS) && (_vestingContract != ZERO_ADDRESS));
 
         _pause();
 
-        saleToken = _saleToken;
         treasury = _treasury;
         USDC = _usdc;
         vestingContract = _vestingContract;
@@ -238,6 +247,36 @@ contract PublicSale is Ownable, Pausable {
         require(tiersHash_ != zeroBytesHash_);
 
         _setTiers(_tiers);
+    }
+
+    /**
+     * @notice Set the sale token.
+     * @param _saleToken Address of the token to be sold.
+     * @dev This function can only be called by `owner` and only once.
+     */
+    function setSaleToken(IERC20 _saleToken) external onlyOwner {
+        require(
+            address(saleToken) == address(0),
+            AlreadySet(this.setSaleToken.selector, bytes32(uint256(uint160(address(_saleToken)))))
+        );
+        require(address(_saleToken) != address(0), InvalidInput(this.setSaleToken.selector, bytes32(uint256(0))));
+        saleToken = _saleToken;
+        emit SaleTokenUpdate(msg.sender, address(saleToken));
+    }
+
+    /**
+     * @notice Set the vesting for a user.
+     * @param _user Address of the user.
+     * @param _amount Amount of tokens to vest.
+     * @param _vestingTime Vesting time for the tokens.
+     * @param _start UNIX timestamp of  the `_vestingTime` to start for the tokens.
+     */
+    function setVesting(address _user, uint256 _amount, uint256 _vestingTime, uint32 _start)
+        external
+        atStage(Stages.Completed)
+        onlyOwner
+    {
+        _setVestingHook(_user, _amount, _vestingTime, _start);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -434,17 +473,18 @@ contract PublicSale is Ownable, Pausable {
      * @param _user Address of the user.
      * @param _amount Amount of tokens to vest.
      * @param _vesting Vesting time for the tokens.
+     * @param _start Vesting start time for the tokens.
      */
-    function _setVestingHook(address _user, uint256 _amount, uint256 _vesting) private {
+    function _setVestingHook(address _user, uint256 _amount, uint256 _vesting, uint32 _start) private {
         saleToken.safeTransferFrom(treasury, address(this), _amount);
         saleToken.forceApprove(vestingContract, _amount);
-        uint32 numberOfSteps = uint32(_vesting) / 30 days;
+        uint32 numberOfSteps = uint32(_vesting) / DEFAULT_STEP_DURATION;
         uint128 stepPercentage = uint128(PERCENTAGE_PRECISION / numberOfSteps);
         IVestingManager(vestingContract).createVesting(
             VestParams({
                 token: saleToken,
                 recipient: _user,
-                start: uint32(saleSchedule.end),
+                start: _start,
                 cliffDuration: 0,
                 stepDuration: DEFAULT_STEP_DURATION,
                 steps: numberOfSteps,
