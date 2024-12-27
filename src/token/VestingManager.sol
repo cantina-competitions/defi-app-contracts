@@ -15,7 +15,7 @@ import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 contract VestingManager is IVestingManager, ERC721 {
     using SafeERC20 for IERC20;
 
-    address public immutable wETH;
+    address public immutable vestingAsset;
 
     mapping(uint256 => Vest) public vests;
 
@@ -29,10 +29,12 @@ contract VestingManager is IVestingManager, ERC721 {
     error NotVestReceiver();
     error InvalidStepSetting();
     error InvalidToken();
+    error OnlyVestingTokenAllowed();
     error NoTokenURI();
 
-    constructor(address _wETH) ERC721("Public Vest Manager", "VSTGER") {
-        wETH = _wETH;
+    constructor(address vestAsset, string memory name, string memory symbol) ERC721(name, symbol) {
+        require(vestAsset != address(0), InvalidToken());
+        vestingAsset = vestAsset;
         vestIds = 1;
     }
 
@@ -57,7 +59,7 @@ contract VestingManager is IVestingManager, ERC721 {
         if (vestParams.stepDuration == 0 || vestParams.steps == 0) {
             revert InvalidStepSetting();
         }
-        if (vestParams.token == IERC20(address(0))) revert InvalidToken();
+        if (vestParams.token != vestParams.token) revert OnlyVestingTokenAllowed();
 
         depositedShares = _depositToken(address(vestParams.token), msg.sender, vestParams.amount);
         stepShares = uint128((vestParams.stepPercentage * depositedShares) / PERCENTAGE_PRECISION);
@@ -68,7 +70,7 @@ contract VestingManager is IVestingManager, ERC721 {
 
         vests[vestId] = Vest({
             owner: msg.sender,
-            token: address(vestParams.token) == address(0) ? IERC20(wETH) : vestParams.token,
+            token: IERC20(vestingAsset),
             start: vestParams.start,
             cliffDuration: vestParams.cliffDuration,
             stepDuration: vestParams.stepDuration,
