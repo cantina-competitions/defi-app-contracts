@@ -413,7 +413,7 @@ contract PublicSale is Ownable, Pausable {
     }
 
     /**
-     * @notice Internal function to verify deposit conditions like minimum/maximum amount and whitelist.
+     * @notice Internal function to verify deposit conditions like minimum/maximum amount
      * @param _amount Amount to deposit.
      * @param _amountDeposited Amount already deposited by the user.
      * @dev Throws custom errors if any condition fails.
