@@ -527,6 +527,15 @@ contract PublicSale is Ownable, Pausable {
     }
 
     /**
+     * @notice Get the remaining cap for a specific tier.
+     * @param _tierIndex The index of the tier.
+     * @return The remaining cap amount for the tier.
+     */
+    function _getRemainingTierCap(uint256 _tierIndex) private view returns(uint256) {
+        return tiers[_tierIndex].cap - tiersDeposited[_tierIndex];
+    }
+
+    /**
      * @notice Check if the vesting duration of a tier is a multiple of the default step duration.
      * @param _tier to which vesting duration to check.
      */
@@ -595,5 +604,14 @@ contract PublicSale is Ownable, Pausable {
      */
     function getRemainingCap() external view returns (uint256) {
         return _getRemainingCap();
+    }
+
+    /**
+     * @notice Get the remaining cap for a specific tier.
+     * @param _tierIndex The index of the tier.
+     * @return The remaining cap amount for the tier.
+     */
+    function getRemainingTierCap(uint256 _tierIndex) external view returns(uint256) {
+        return _getRemainingTierCap(_tierIndex);
     }
 }
