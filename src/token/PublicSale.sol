@@ -509,9 +509,12 @@ contract PublicSale is Ownable, Pausable {
      *        - `Stages.ClaimAndVest`: Sale has ended and users can claim and start vesting.
      */
     function _getCurrentStage() private view returns (Stages) {
+        if (saleSchedule.start == 0 && saleSchedule.end == 0) return Stages.ComingSoon;
+        if (vestingStart != 0) return Stages.ClaimAndVest;
+        if (totalFundsCollected >= maxTotalFunds) return Stages.Completed;
+
         if (block.timestamp < saleSchedule.start) return Stages.ComingSoon;
         if (block.timestamp < saleSchedule.end) return Stages.TokenPurchase;
-        if (vestingStart != 0) return Stages.ClaimAndVest;
 
         return Stages.Completed;
     }
@@ -531,7 +534,7 @@ contract PublicSale is Ownable, Pausable {
      * @param _tierIndex The index of the tier.
      * @return The remaining cap amount for the tier.
      */
-    function _getRemainingTierCap(uint256 _tierIndex) private view returns(uint256) {
+    function _getRemainingTierCap(uint256 _tierIndex) private view returns (uint256) {
         return tiers[_tierIndex].cap - tiersDeposited[_tierIndex];
     }
 
@@ -611,7 +614,7 @@ contract PublicSale is Ownable, Pausable {
      * @param _tierIndex The index of the tier.
      * @return The remaining cap amount for the tier.
      */
-    function getRemainingTierCap(uint256 _tierIndex) external view returns(uint256) {
+    function getRemainingTierCap(uint256 _tierIndex) external view returns (uint256) {
         return _getRemainingTierCap(_tierIndex);
     }
 }
