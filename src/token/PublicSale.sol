@@ -220,9 +220,9 @@ contract PublicSale is Ownable, Pausable {
         // Tier prices are scaled by 10^18 to keep precision during division
         _setTiers(
             [
-                Tier(120000000000000000, 2_000_000e6, 540 days), // 0
-                Tier(160000000000000000, 4_000_000e6, 360 days), // 1
-                Tier(180000000000000000, 8_000_000e6, 180 days) // 2
+                Tier(0.1 ether, 1_000_000e6, 720 days), // 0
+                Tier(0.2 ether, 2_000_000e6, 360 days), // 1
+                Tier(0.3 ether, 4_000_000e6, 0 days) // 2
             ]
         );
     }
