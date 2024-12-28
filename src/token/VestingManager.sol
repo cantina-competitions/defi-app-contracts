@@ -58,7 +58,7 @@ contract VestingManager is IVestingManager, ERC721 {
         if (vestParams.stepDuration == 0 || vestParams.steps == 0) {
             revert InvalidStepSetting();
         }
-        if (vestParams.token != vestParams.token) revert OnlyVestingTokenAllowed();
+        if (address(vestParams.token) != vestingAsset) revert OnlyVestingTokenAllowed();
 
         depositedShares = _depositToken(address(vestParams.token), msg.sender, vestParams.amount);
         stepShares = uint128((vestParams.stepPercentage * depositedShares) / PERCENTAGE_PRECISION);
