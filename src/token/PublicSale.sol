@@ -478,7 +478,6 @@ contract PublicSale is Ownable, Pausable {
             revert InvalidPurchaseInput(this.depositUSDC.selector, "_tierIndex", "tier cap reached");
         }
 
-        // If amount is within the current tier cap we don't need to split the price into multiple tiers
         if (_amount <= _remainingTierCap) {
             return (_computeTokens(_amount, _tier.price), 0);
         } else {
