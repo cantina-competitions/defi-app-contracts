@@ -388,8 +388,7 @@ contract PublicSale is Ownable, Pausable {
      * @dev Emits a Purchase event upon successful purchase.
      */
     function _purchase(uint256 _amountUSDC, UserDepositInfo storage _userDepositInfo, uint256 _tierIndex) private {
-        (uint256 _purchasedTokens, uint256 _remainingAmount) =
-            _calculateTokensToTransfer(_amountUSDC, _tierIndex, tiers, tiersDeposited);
+        (uint256 _purchasedTokens, uint256 _remainingAmount) = _calculateTokensToTransfer(_amountUSDC, _tierIndex);
 
         uint256 depositedAmount_ = _amountUSDC - _remainingAmount;
 
@@ -460,19 +459,13 @@ contract PublicSale is Ownable, Pausable {
      * @dev This function accounts for multiple tiers and computes tokens across them if necessary.
      * @param _amount The amount deposited by the user.
      * @param _tierIndex The index tier to purchase.
-     * @param _tiers An array containing the details of each tier.
      * @return A tuple containing:
      *         - `resultingTokens_` The total number of tokens purchased.
      *         - `remainingAmount_` The remaining amount after token computation.
      */
-    function _calculateTokensToTransfer(
-        uint256 _amount,
-        uint256 _tierIndex,
-        Tier[3] memory _tiers,
-        uint256[3] memory _tiersDeposited
-    ) private pure returns (uint256, uint256) {
-        Tier memory _tier = _tiers[_tierIndex];
-        uint256 _remainingTierCap = _tier.cap - _tiersDeposited[_tierIndex];
+    function _calculateTokensToTransfer(uint256 _amount, uint256 _tierIndex) private view returns (uint256, uint256) {
+        Tier memory _tier = tiers[_tierIndex];
+        uint256 _remainingTierCap = _tier.cap - tiersDeposited[_tierIndex];
 
         if (_remainingTierCap == 0) {
             revert InvalidPurchaseInput(this.depositUSDC.selector, "_tierIndex", "tier cap reached");
