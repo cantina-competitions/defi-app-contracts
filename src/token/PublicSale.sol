@@ -174,6 +174,11 @@ contract PublicSale is Ownable, Pausable {
     uint256 public totalFundsCollected;
 
     /**
+     * @dev Total tokens purchased so far
+     */
+    uint256 public totalTokensPurchased;
+
+    /**
      * @dev Mapping to track deposits by each user.
      */
     mapping(address => UserDepositInfo) public userDeposits;
@@ -389,6 +394,7 @@ contract PublicSale is Ownable, Pausable {
         uint256 depositedAmount_ = _amountUSDC - _remainingAmount;
 
         totalFundsCollected += depositedAmount_;
+        totalTokensPurchased += _purchasedTokens;
         tiersDeposited[_tierIndex] += depositedAmount_;
 
         _userDepositInfo.amountDeposited += depositedAmount_;
