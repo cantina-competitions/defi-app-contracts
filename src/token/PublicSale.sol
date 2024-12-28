@@ -233,7 +233,7 @@ contract PublicSale is Ownable, Pausable {
 
     /**
      * @notice Sets the sale parameters including minimum and maximum deposit amounts.
-     * @dev This function can only be called by an account with the DEFAULT_ADMIN_ROLE and when the contract is paused.
+     * @dev This function can only be called by `owner` and when the contract is paused.
      * @param _minDepositAmount The minimum amount that can be deposited.
      * @param _maxDepositAmount The maximum amount that can be deposited.
      * Emits a {SaleParametersUpdate} event.
@@ -247,7 +247,7 @@ contract PublicSale is Ownable, Pausable {
 
     /**
      * @notice Sets the sale schedule including KYC and token purchase periods.
-     * @dev This function can only be called by an account with the DEFAULT_ADMIN_ROLE and when the contract is paused.
+     * @dev This function can only be called by `owner`and when the contract is paused.
      * @param _tokenPurchaseStart The timestamp until which users can start purchasing.
      * @param _tokenPurchaseEnd The timestamp until which token purchases can be made.
      * Emits a {SaleScheduleUpdate} event.
@@ -261,7 +261,7 @@ contract PublicSale is Ownable, Pausable {
 
     /**
      * @notice Sets the tiers for the sale.
-     * @dev This function can only be called by an account with the DEFAULT_ADMIN_ROLE and when the contract is paused.
+     * @dev This function can only be called by `owner`and when the contract is paused.
      * @param _tiers An array of Tier structs representing the different tiers.
      * Emits a {TiersUpdate} event.
      */
