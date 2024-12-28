@@ -33,7 +33,7 @@ interface IVestingManager {
         external
         returns (uint256 depositedShares, uint256 vestId, uint128 stepShares, uint128 cliffShares);
 
-    function withdraw(uint256 vestId, bytes memory taskData) external;
+    function withdraw(uint256 vestId) external;
 
     function stopVesting(uint256 vestId) external;
 

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.27;
 
 import {IVestingManager, VestParams, Vest} from "../interfaces/IVestingManager.sol";
-import {ITasker} from "../interfaces/ITasker.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -95,7 +94,7 @@ contract VestingManager is IVestingManager, ERC721 {
         );
     }
 
-    function withdraw(uint256 vestId, bytes calldata taskData) external override {
+    function withdraw(uint256 vestId) external override {
         Vest storage vest = vests[vestId];
         address recipient = ownerOf(vestId);
         if (recipient != msg.sender) revert NotVestReceiver();
@@ -106,8 +105,6 @@ contract VestingManager is IVestingManager, ERC721 {
         vest.claimed += uint128(canClaim);
 
         _transferToken(address(vest.token), recipient, canClaim);
-
-        if (taskData.length != 0) ITasker(recipient).onTaskReceived(taskData);
 
         emit Withdraw(vestId, vest.token, canClaim);
     }
