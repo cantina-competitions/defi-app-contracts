@@ -37,6 +37,10 @@ contract VestingManager is IVestingManager, ERC721 {
         vestIds = 1;
     }
 
+    function getVestStruct(uint256 vestId) external view returns (Vest memory) {
+        return vests[vestId];
+    }
+
     function tokenURI(uint256 vestId) public view override returns (string memory) {
         string memory uri = vests[vestId].tokenURI;
         if (bytes(uri).length > 0) {
@@ -129,6 +133,13 @@ contract VestingManager is IVestingManager, ERC721 {
     function vestBalance(uint256 vestId) external view override returns (uint256) {
         Vest memory vest = vests[vestId];
         return _balanceOf(vest) - vest.claimed;
+    }
+
+    function vestSummary(uint256 vestId) external view returns (uint256 remainingVested, uint256 canClaim) {
+        Vest memory vest = vests[vestId];
+        uint256 initiallyVested = vest.stepShares * vest.steps;
+        remainingVested = initiallyVested - vest.claimed;
+        canClaim = _balanceOf(vest) >= vest.claimed ? _balanceOf(vest) - vest.claimed : 0;
     }
 
     function _balanceOf(Vest memory vest) internal view returns (uint256 claimable) {
