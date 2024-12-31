@@ -59,7 +59,7 @@ contract PublicSale is Ownable, Pausable {
     event TiersUpdate(address indexed user, Tier[3] tiers);
     event MaxTotalFundsUpdate(address indexed user, uint256 maxTotalFunds);
     event SaleParametersUpdate(address indexed user, uint256 minDepositAmount, uint256 maxDepositAmount);
-    event VestingReadyUpdate(address indexed user, address saleToken, uint32 vestingStart);
+    event VestingReadyUpdate(address indexed user, address saleToken, address vestingContract, uint32 vestingStart);
     event SaleScheduleUpdate(address indexed user, uint256 comingSoon, uint256 tokenPurchase);
     event TokensPurchase(
         address indexed user,
@@ -139,7 +139,7 @@ contract PublicSale is Ownable, Pausable {
     /**
      * @notice  Address of the vesting contract.
      */
-    address public immutable vestingContract;
+    address public vestingContract;
 
     /**
      * @dev Vesting start timestamp.
@@ -203,26 +203,25 @@ contract PublicSale is Ownable, Pausable {
      * @param _admin Address of the admin.
      * @param _treasury Address of the treasury.(multisig)
      * @param _usdc Address of the USDC token.
-     * @param _vestingContract Address of the vesting contract.
      */
-    constructor(address _admin, address _treasury, IERC20 _usdc, address _vestingContract) Ownable(_admin) {
+    constructor(address _admin, address _treasury, IERC20 _usdc) Ownable(_admin) {
         address ZERO_ADDRESS = address(0);
 
-        require((_treasury != ZERO_ADDRESS) && (address(_usdc) != ZERO_ADDRESS) && (_vestingContract != ZERO_ADDRESS));
+        require((_treasury != ZERO_ADDRESS) && (address(_usdc) != ZERO_ADDRESS));
 
         _pause();
 
         treasury = _treasury;
         USDC = _usdc;
-        vestingContract = _vestingContract;
+
         emit ExternalContractsSet(msg.sender, treasury, USDC, vestingContract);
 
         // Tier prices are scaled by 10^18 to keep precision during division
         _setTiers(
             [
-                Tier(0.1 ether, 1_000_000e6, 720 days), // 0
-                Tier(0.2 ether, 2_000_000e6, 360 days), // 1
-                Tier(0.3 ether, 4_000_000e6, 0 days) // 2
+                Tier(0.01 ether, 1_000_000e6, 720 days), // 0
+                Tier(0.02 ether, 2_000_000e6, 360 days), // 1
+                Tier(0.03 ether, 3_000_000e6, 0 days) // 2
             ]
         );
     }
@@ -256,6 +255,7 @@ contract PublicSale is Ownable, Pausable {
         require((_tokenPurchaseStart < _tokenPurchaseEnd));
 
         saleSchedule = SaleSchedule(_tokenPurchaseStart, _tokenPurchaseEnd);
+
         emit SaleScheduleUpdate(msg.sender, _tokenPurchaseStart, _tokenPurchaseEnd);
     }
 
@@ -276,24 +276,34 @@ contract PublicSale is Ownable, Pausable {
     /**
      * @notice Set the sale token.
      * @param _saleToken Address of the token to be sold.
+     * @param _vestingContract Address of the vesting contract.
      * @param _vestingStart UNIX timestamp of the vesting start.
      * @dev This function can only be called by `owner` and only once.
      */
-    function setVestingReady(IERC20 _saleToken, uint32 _vestingStart) external onlyOwner atStage(Stages.Completed) {
+    function setVestingReady(IERC20 _saleToken, address _vestingContract, uint32 _vestingStart)
+        external
+        onlyOwner
+        atStage(Stages.Completed)
+    {
         require(
             address(saleToken) == address(0),
             AlreadySet(this.setVestingReady.selector, bytes32(uint256(uint160(address(_saleToken)))))
         );
-        require(address(_saleToken) != address(0), InvalidInput(this.setVestingReady.selector, bytes32(uint256(0))));
+        require(
+            (address(_saleToken) != address(0)) && (_vestingContract != address(0)),
+            InvalidInput(this.setVestingReady.selector, bytes32(uint256(0)))
+        );
+
         require(
             _vestingStart > block.timestamp,
             InvalidInput(this.setVestingReady.selector, bytes32(uint256(_vestingStart)))
         );
 
         saleToken = _saleToken;
+        vestingContract = _vestingContract;
         vestingStart = _vestingStart;
 
-        emit VestingReadyUpdate(msg.sender, address(saleToken), vestingStart);
+        emit VestingReadyUpdate(msg.sender, address(saleToken), vestingContract, vestingStart);
     }
 
     /**
@@ -343,8 +353,9 @@ contract PublicSale is Ownable, Pausable {
         require(!userDepositInfo.claimed, UserHasClaimed(msg.sender));
         userDepositInfo.claimed = true;
 
+        Purchase memory purchase;
         for (uint256 i = 0; i < MAX_TIERS; i++) {
-            Purchase memory purchase = userDepositInfo.purchases[i];
+            purchase = userDepositInfo.purchases[i];
             if (purchase.purchasedTokens > 0) {
                 _setVestingHook(msg.sender, purchase.purchasedTokens, purchase.vesting, vestingStart);
             }
@@ -457,7 +468,7 @@ contract PublicSale is Ownable, Pausable {
     /**
      * @notice Calculates the number of tokens to transfer based on the deposited amount and tiers.
      * @dev This function accounts for multiple tiers and computes tokens across them if necessary.
-     * @param _amount The amount deposited by the user.
+     * @param _amount The amount USDC deposited by the user.
      * @param _tierIndex The index tier to purchase.
      * @return A tuple containing:
      *         - `resultingTokens_` The total number of tokens purchased.
@@ -480,15 +491,15 @@ contract PublicSale is Ownable, Pausable {
     }
 
     /**
-     * @param _amount The amount in USD
+     * @param _amountUSDC The amount in USDC
      * @param _price The price of the token in USD
      */
-    function _computeTokens(uint256 _amount, uint256 _price) private pure returns (uint256) {
+    function _computeTokens(uint256 _amountUSDC, uint256 _price) private pure returns (uint256) {
         // _price = price * 10^18 --> precision scaling
         // _amount = (input_amount * 10^6 (USDC/T)) * 10^18 (_price)
         // (_amount * 1e18) / _price = (10^6 * 10^18) / 10^18 = 10^6 precision
         // 10^6 * 10^12 = 10^18 --> scale for future token's decimals
-        return ((_amount * 1e18) / _price) * 1e12;
+        return ((_amountUSDC * 1e18) / _price);
     }
 
     /**
@@ -551,14 +562,17 @@ contract PublicSale is Ownable, Pausable {
         saleToken.safeTransferFrom(treasury, address(this), _amount);
         saleToken.forceApprove(vestingContract, _amount);
         uint32 numberOfSteps = uint32(_vesting) / DEFAULT_STEP_DURATION;
-        uint128 stepPercentage = uint128(PERCENTAGE_PRECISION / numberOfSteps);
+        numberOfSteps = numberOfSteps > 0 ? numberOfSteps : 1;
+        uint128 stepPercentage =
+            numberOfSteps > 0 ? uint128(PERCENTAGE_PRECISION / numberOfSteps) : uint128(PERCENTAGE_PRECISION);
+        uint32 stepDuration = numberOfSteps > 1 ? DEFAULT_STEP_DURATION : 1;
         IVestingManager(vestingContract).createVesting(
             VestParams({
                 token: saleToken,
                 recipient: _user,
                 start: _start,
                 cliffDuration: 0,
-                stepDuration: DEFAULT_STEP_DURATION,
+                stepDuration: stepDuration,
                 steps: numberOfSteps,
                 stepPercentage: stepPercentage,
                 amount: uint128(_amount),
@@ -582,6 +596,15 @@ contract PublicSale is Ownable, Pausable {
      */
     function getCurrentStage() external view returns (Stages) {
         return _getCurrentStage();
+    }
+
+    /**
+     * @notice Get the user deposit information.
+     * @param _user Address of the user.
+     * @return UserDepositInfo struct containing the user's deposit information.
+     */
+    function getUserDepositInfo(address _user) external view returns (UserDepositInfo memory) {
+        return userDeposits[_user];
     }
 
     /**
