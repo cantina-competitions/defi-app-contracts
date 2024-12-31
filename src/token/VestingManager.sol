@@ -28,7 +28,6 @@ contract VestingManager is IVestingManager, ERC721 {
     error NotVestReceiver();
     error InvalidStepSetting();
     error InvalidToken();
-    error OnlyVestingTokenAllowed();
     error NoTokenURI();
 
     constructor(address vestAsset, string memory name, string memory symbol) ERC721(name, symbol) {
@@ -50,6 +49,12 @@ contract VestingManager is IVestingManager, ERC721 {
         }
     }
 
+    function setVestTokenURI(uint256 vestId, string calldata _tokenURI) external {
+        Vest storage vest = vests[vestId];
+        if (vest.owner != msg.sender) revert NotOwner();
+        vest.tokenURI = _tokenURI;
+    }
+
     function createVesting(VestParams calldata vestParams)
         external
         override
@@ -62,9 +67,8 @@ contract VestingManager is IVestingManager, ERC721 {
         if (vestParams.stepDuration == 0 || vestParams.steps == 0) {
             revert InvalidStepSetting();
         }
-        if (address(vestParams.token) != vestingAsset) revert OnlyVestingTokenAllowed();
 
-        depositedShares = _depositToken(address(vestParams.token), msg.sender, vestParams.amount);
+        depositedShares = _depositToken(vestingAsset, msg.sender, vestParams.amount);
         stepShares = uint128((vestParams.stepPercentage * depositedShares) / PERCENTAGE_PRECISION);
         cliffShares = uint128(depositedShares - (stepShares * vestParams.steps));
 
@@ -73,7 +77,6 @@ contract VestingManager is IVestingManager, ERC721 {
 
         vests[vestId] = Vest({
             owner: msg.sender,
-            token: IERC20(vestingAsset),
             start: vestParams.start,
             cliffDuration: vestParams.cliffDuration,
             stepDuration: vestParams.stepDuration,
@@ -86,7 +89,7 @@ contract VestingManager is IVestingManager, ERC721 {
 
         emit CreateVesting(
             vestId,
-            vestParams.token,
+            IERC20(vestingAsset),
             msg.sender,
             vestParams.recipient,
             vestParams.start,
@@ -108,9 +111,9 @@ contract VestingManager is IVestingManager, ERC721 {
 
         vest.claimed += uint128(canClaim);
 
-        _transferToken(address(vest.token), recipient, canClaim);
+        _transferToken(vestingAsset, recipient, canClaim);
 
-        emit Withdraw(vestId, vest.token, canClaim);
+        emit Withdraw(vestId, IERC20(vestingAsset), canClaim);
     }
 
     function stopVesting(uint256 vestId) external override {
@@ -124,10 +127,10 @@ contract VestingManager is IVestingManager, ERC721 {
 
         delete vests[vestId];
 
-        _transferToken(address(vest.token), ownerOf(vestId), canClaim);
-        _transferToken(address(vest.token), msg.sender, returnShares);
+        _transferToken(vestingAsset, ownerOf(vestId), canClaim);
+        _transferToken(vestingAsset, msg.sender, returnShares);
 
-        emit CancelVesting(vestId, returnShares, canClaim, vest.token);
+        emit CancelVesting(vestId, returnShares, canClaim, IERC20(vestingAsset));
     }
 
     function vestBalance(uint256 vestId) external view override returns (uint256) {

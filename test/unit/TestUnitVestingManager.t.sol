@@ -37,7 +37,6 @@ contract TestUnitVestingManager is BasicFixture {
         vestingAsset.mint(Admin.addr, vestAmount);
 
         VestParams memory vestParams = VestParams({
-            token: vestingAsset,
             recipient: User1.addr,
             start: uint32(block.timestamp),
             cliffDuration: 0,
@@ -65,10 +64,10 @@ contract TestUnitVestingManager is BasicFixture {
 
     function test_badAssetCreateVesting() public {
         uint128 vestAmount = 1000e6;
+        // Mint USDC to Admin instead of vestingAsset
         usdc.mint(Admin.addr, vestAmount);
 
         VestParams memory vestParams = VestParams({
-            token: usdc,
             recipient: User1.addr,
             start: uint32(block.timestamp),
             cliffDuration: 0,
@@ -93,7 +92,6 @@ contract TestUnitVestingManager is BasicFixture {
         vestingAsset.mint(Admin.addr, vestAmount);
 
         VestParams memory vestParams = VestParams({
-            token: vestingAsset,
             recipient: User1.addr,
             start: uint32(block.timestamp),
             cliffDuration: 0,
@@ -143,7 +141,6 @@ contract TestUnitVestingManager is BasicFixture {
         vestingAsset.mint(Admin.addr, vestAmount);
 
         VestParams memory vestParams = VestParams({
-            token: vestingAsset,
             recipient: User1.addr,
             start: uint32(block.timestamp),
             cliffDuration: 0,
@@ -175,7 +172,6 @@ contract TestUnitVestingManager is BasicFixture {
         vestingAsset.mint(Admin.addr, vestAmount);
 
         VestParams memory vestParams = VestParams({
-            token: vestingAsset,
             recipient: User1.addr,
             start: uint32(block.timestamp),
             cliffDuration: 0,

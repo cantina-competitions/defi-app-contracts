@@ -568,7 +568,6 @@ contract PublicSale is Ownable, Pausable {
         uint32 stepDuration = numberOfSteps > 1 ? DEFAULT_STEP_DURATION : 1;
         IVestingManager(vestingContract).createVesting(
             VestParams({
-                token: saleToken,
                 recipient: _user,
                 start: _start,
                 cliffDuration: 0,

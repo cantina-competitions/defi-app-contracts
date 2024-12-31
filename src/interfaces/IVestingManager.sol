@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 struct VestParams {
-    IERC20 token;
     address recipient;
     uint32 start;
     uint32 cliffDuration;
@@ -17,7 +16,6 @@ struct VestParams {
 
 struct Vest {
     address owner;
-    IERC20 token;
     uint32 start;
     uint32 cliffDuration;
     uint32 stepDuration;
