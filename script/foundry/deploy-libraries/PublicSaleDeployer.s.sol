@@ -10,7 +10,6 @@ struct PublicSaleInitParams {
     address admin;
     address treasury;
     address usdc;
-    address vestingContract;
 }
 
 library PublicSaleDeployer {
@@ -19,7 +18,7 @@ library PublicSaleDeployer {
         returns (PublicSale)
     {
         string memory chainName = fs.getChainName(block.chainid);
-        PublicSale instance = new PublicSale(params.admin, params.treasury, IERC20(params.usdc), params.vestingContract);
+        PublicSale instance = new PublicSale(params.admin, params.treasury, IERC20(params.usdc));
         if (!forTesting) {
             console.log("PublicSale deployed:", address(instance));
             fs.saveAddress(contractLabel, chainName, address(instance));
