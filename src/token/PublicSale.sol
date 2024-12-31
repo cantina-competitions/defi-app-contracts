@@ -298,6 +298,10 @@ contract PublicSale is Ownable, Pausable {
             _vestingStart > block.timestamp,
             InvalidInput(this.setVestingReady.selector, bytes32(uint256(_vestingStart)))
         );
+        require(
+            address(_saleToken) == IVestingManager(_vestingContract).vestingAsset(),
+            InvalidInput(this.setVestingReady.selector, bytes32(uint256(uint160(address(_saleToken)))))
+        );
 
         saleToken = _saleToken;
         vestingContract = _vestingContract;

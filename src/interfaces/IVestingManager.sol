@@ -27,6 +27,8 @@ struct Vest {
 }
 
 interface IVestingManager {
+    function vestingAsset() external view returns (address);
+
     function createVesting(VestParams calldata vestParams)
         external
         returns (uint256 depositedShares, uint256 vestId, uint128 stepShares, uint128 cliffShares);
