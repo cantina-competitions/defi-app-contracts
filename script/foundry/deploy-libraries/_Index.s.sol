@@ -6,4 +6,6 @@ import {DefiAppStakerDeployer} from "./DefiAppStakerDeployer.s.sol";
 import {DLockZapDeployer, DLockZapInitializerParams} from "./DLockZapDeployer.s.sol";
 import {ERC1967ProxyDeployer} from "./ERC1967ProxyDeployer.s.sol";
 import {MFDBaseDeployer} from "./MFDBaseDeployer.s.sol";
+import {PublicSaleDeployer, PublicSaleInitParams} from "./PublicSaleDeployer.s.sol";
+import {VestingManagerDeployer, VestingManagerInitParams} from "./VestingManagerDeployer.s.sol";
 import {VolatileAMMPoolHelperDeployer, VolatileAMMPoolHelperInitParams} from "./VolatileAMMPoolHelperDeployer.s.sol";
