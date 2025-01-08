@@ -280,8 +280,12 @@ contract PublicSale is Ownable, Pausable {
         _setTiers(_tiers);
     }
 
-    function setBacklist(address _blacklist) external onlyOwner {
-        require(_blacklist != address(0), InvalidInput(this.setBacklist.selector, bytes32(uint256(0))));
+    /**
+     * @notice Set the blacklist contract.
+     * @param _blacklist Address of the blacklist contract.
+     */
+    function setBlacklist(address _blacklist) external onlyOwner {
+        require(_blacklist != address(0), InvalidInput(this.setBlacklist.selector, bytes32(uint256(0))));
         blacklist = _blacklist;
         emit BlacklistSet(msg.sender, _blacklist);
     }
