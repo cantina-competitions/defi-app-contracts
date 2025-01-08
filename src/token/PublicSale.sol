@@ -5,6 +5,7 @@ import {IVestingManager, VestParams} from "../interfaces/IVestingManager.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {IBlacklist} from "../interfaces/IBlacklist.sol";
 
 /// @title PublicSale Contract
 /// @notice Contract for the public sale of tokens.
@@ -61,6 +62,7 @@ contract PublicSale is Ownable, Pausable {
     event SaleParametersUpdate(address indexed user, uint256 minDepositAmount, uint256 maxDepositAmount);
     event VestingReadyUpdate(address indexed user, address saleToken, address vestingContract, uint32 vestingStart);
     event SaleScheduleUpdate(address indexed user, uint256 comingSoon, uint256 tokenPurchase);
+    event BlacklistSet(address indexed user, address blacklist);
     event TokensPurchase(
         address indexed user,
         uint256 depositedAmount,
@@ -116,6 +118,21 @@ contract PublicSale is Ownable, Pausable {
     uint256 internal constant MAX_TIERS = 3;
 
     /**
+     * @dev Recipient of collected funds.
+     */
+    address private immutable treasury;
+
+    /**
+     * @dev Address of USDC token.
+     */
+    IERC20 private immutable USDC;
+
+    /**
+     * @dev Blacklist contract
+     */
+    address private blacklist;
+
+    /**
      * @notice Maximum funds allowed to be collected.
      * @dev 20,000,000 USDC(*) times 10^6, 6 is the number of decimals of USDC.
      */
@@ -125,16 +142,6 @@ contract PublicSale is Ownable, Pausable {
      * @dev Address of the token being sold.
      */
     IERC20 public saleToken;
-
-    /**
-     * @dev Recipient of collected funds.
-     */
-    address private immutable treasury;
-
-    /**
-     * @dev Address of USDC token.
-     */
-    IERC20 private immutable USDC;
 
     /**
      * @notice  Address of the vesting contract.
@@ -273,6 +280,12 @@ contract PublicSale is Ownable, Pausable {
         _setTiers(_tiers);
     }
 
+    function setBacklist(address _blacklist) external onlyOwner {
+        require(_blacklist != address(0), InvalidInput(this.setBacklist.selector, bytes32(uint256(0))));
+        blacklist = _blacklist;
+        emit BlacklistSet(msg.sender, _blacklist);
+    }
+
     /**
      * @notice Set the sale token.
      * @param _saleToken Address of the token to be sold.
@@ -336,6 +349,7 @@ contract PublicSale is Ownable, Pausable {
      * @dev Emits a Purchase event upon successful purchase.
      */
     function depositUSDC(uint256 _amount, uint256 _tierIndex) external whenNotPaused atStage(Stages.TokenPurchase) {
+        _checkBlacklist(msg.sender);
         UserDepositInfo storage userDepositInfo = userDeposits[msg.sender];
 
         if (userDepositInfo.purchases.length == 0) {
@@ -582,6 +596,16 @@ contract PublicSale is Ownable, Pausable {
                 tokenURI: ""
             })
         );
+    }
+
+    /**
+     * @dev If `blacklist` is defined check if the user is blacklisted.
+     * @param _user Address of the user.
+     */
+    function _checkBlacklist(address _user) private view {
+        if (blacklist != address(0)) {
+            require(!IBlacklist(blacklist).isBlacklisted(_user), "User is blacklisted");
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
