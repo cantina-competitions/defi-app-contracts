@@ -481,6 +481,7 @@ contract PublicSale is Ownable, Pausable {
      * @dev Emits a {TiersUpdate} event if the new tiers are set.
      */
     function _setTiers(Tier[MAX_TIERS] memory _tiers) private {
+        maxTotalFunds = 0;
         for (uint256 i = 0; i < MAX_TIERS; i++) {
             _checkTierVestDuration(_tiers[i]);
             tiers[i] = _tiers[i];
