@@ -338,11 +338,7 @@ contract PublicSale is Ownable, Pausable {
      * @param _vestingTime Vesting time for the tokens.
      * @param _start UNIX timestamp of  the `_vestingTime` to start for the tokens.
      */
-    function setVesting(address _user, uint256 _amount, uint256 _vestingTime, uint32 _start)
-        external
-        atStage(Stages.Completed)
-        onlyOwner
-    {
+    function setVesting(address _user, uint256 _amount, uint256 _vestingTime, uint32 _start) external onlyOwner {
         _setVestingHook(_user, _amount, _vestingTime, _start);
     }
 

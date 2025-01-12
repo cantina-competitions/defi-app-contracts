@@ -62,6 +62,37 @@ contract TestUnitVestingManager is BasicFixture {
         assertEq(vestingAsset.balanceOf(address(vestingManager)), vestAmount);
     }
 
+    function test_createVestingWithPastStartDate() public {
+        uint128 vestAmount = 1000 ether;
+        uint256 backTimeSteps = 2;
+        vestingAsset.mint(Admin.addr, vestAmount);
+
+        VestParams memory vestParams = VestParams({
+            recipient: User1.addr,
+            start: uint32(block.timestamp - backTimeSteps * TEST_STEP_DURATION),
+            cliffDuration: 0,
+            stepDuration: TEST_STEP_DURATION,
+            steps: TEST_STEPS,
+            stepPercentage: FULL_PERCENTAGE / TEST_STEPS,
+            amount: vestAmount,
+            tokenURI: ""
+        });
+
+        vm.startPrank(Admin.addr);
+        vestingAsset.approve(address(vestingManager), vestAmount);
+        (, uint256 vestId,,) = vestingManager.createVesting(vestParams);
+        vm.stopPrank();
+
+        (uint256 remainingVested, uint256 canClaim) = vestingManager.vestSummary(vestId);
+
+        assertEq(vestingManager.balanceOf(User1.addr), 1);
+        assertEq(remainingVested, vestAmount);
+        assertEq(canClaim, backTimeSteps * (vestAmount / TEST_STEPS));
+        assertEq(vestingAsset.balanceOf(User1.addr), 0);
+        assertEq(vestingAsset.balanceOf(Admin.addr), 0);
+        assertEq(vestingAsset.balanceOf(address(vestingManager)), vestAmount);
+    }
+
     function test_badAssetCreateVesting() public {
         uint128 vestAmount = 1000e6;
         // Mint USDC to Admin instead of vestingAsset

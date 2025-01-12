@@ -23,7 +23,6 @@ contract VestingManager is IVestingManager, ERC721 {
     uint256 public constant PERCENTAGE_PRECISION = 1e18;
 
     // custom errors
-    error InvalidStart();
     error NotOwner();
     error NotVestReceiver();
     error InvalidStepSetting();
@@ -60,7 +59,6 @@ contract VestingManager is IVestingManager, ERC721 {
         override
         returns (uint256 depositedShares, uint256 vestId, uint128 stepShares, uint128 cliffShares)
     {
-        if (vestParams.start < block.timestamp) revert InvalidStart();
         if (vestParams.stepPercentage > PERCENTAGE_PRECISION) {
             revert InvalidStepSetting();
         }
