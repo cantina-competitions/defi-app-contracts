@@ -125,9 +125,12 @@ contract TestUnitPublicSale is BasicFixture {
 
             uint256 totalAmountDeposited = publicSale.totalFundsCollected();
             PublicSale.UserDepositInfo memory depositInfo = publicSale.getUserDepositInfo(User1.addr);
+            (uint256 price,,) = publicSale.tiers(TIER_1);
+            uint256 expectedTokens = compute_token_amount(purchaseAmount, price);
 
             assertEq(publicSale.getRemainingDepositAmount(User1.addr), MAX_DEPOSIT_AMOUNT - purchaseAmount);
             assertEq(depositInfo.amountDeposited, uint256(purchaseAmount));
+            assertEq(depositInfo.purchases[TIER_1].purchasedTokens, expectedTokens);
             assertEq(totalAmountDeposited, uint256(purchaseAmount));
             assertEq(usdc.balanceOf(Admin.addr), uint256(purchaseAmount));
         }
@@ -261,7 +264,7 @@ contract TestUnitPublicSale is BasicFixture {
     }
 
     function compute_token_amount(uint256 usdcAmount, uint256 priceE18) internal pure returns (uint256) {
-        uint256 tokenAmount = usdcAmount * 1e18 / priceE18;
+        uint256 tokenAmount = (usdcAmount * 1e30) / priceE18;
         console.log("Token amount: ", tokenAmount);
         return tokenAmount;
     }

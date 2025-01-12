@@ -2,6 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {IVestingManager, VestParams} from "../interfaces/IVestingManager.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
@@ -292,10 +293,11 @@ contract PublicSale is Ownable, Pausable {
 
     /**
      * @notice Set the sale token.
-     * @param _saleToken Address of the token to be sold.
+     * @param _saleToken Address of the token to be sold
      * @param _vestingContract Address of the vesting contract.
      * @param _vestingStart UNIX timestamp of the vesting start.
      * @dev This function can only be called by `owner` and only once.
+     * _saleToken must be 18 decimals.
      */
     function setVestingReady(IERC20 _saleToken, address _vestingContract, uint32 _vestingStart)
         external
@@ -319,6 +321,8 @@ contract PublicSale is Ownable, Pausable {
             address(_saleToken) == IVestingManager(_vestingContract).vestingAsset(),
             InvalidInput(this.setVestingReady.selector, bytes32(uint256(uint160(address(_saleToken)))))
         );
+        uint256 saleTokenDecimals = ERC20(address(_saleToken)).decimals();
+        require(saleTokenDecimals == 18, InvalidInput(this.setVestingReady.selector, bytes32(saleTokenDecimals)));
 
         saleToken = _saleToken;
         vestingContract = _vestingContract;
@@ -490,13 +494,17 @@ contract PublicSale is Ownable, Pausable {
     /**
      * @notice Calculates the number of tokens to transfer based on the deposited amount and tiers.
      * @dev This function accounts for multiple tiers and computes tokens across them if necessary.
-     * @param _amount The amount USDC deposited by the user.
+     * @param _amountUsdc The amount USDC deposited by the user.
      * @param _tierIndex The index tier to purchase.
      * @return A tuple containing:
      *         - `resultingTokens_` The total number of tokens purchased.
      *         - `remainingAmount_` The remaining amount after token computation.
      */
-    function _calculateTokensToTransfer(uint256 _amount, uint256 _tierIndex) private view returns (uint256, uint256) {
+    function _calculateTokensToTransfer(uint256 _amountUsdc, uint256 _tierIndex)
+        private
+        view
+        returns (uint256, uint256)
+    {
         Tier memory _tier = tiers[_tierIndex];
         uint256 _remainingTierCap = _tier.cap - tiersDeposited[_tierIndex];
 
@@ -504,10 +512,10 @@ contract PublicSale is Ownable, Pausable {
             revert InvalidPurchaseInput(this.depositUSDC.selector, "_tierIndex", "tier cap reached");
         }
 
-        if (_amount <= _remainingTierCap) {
-            return (_computeTokens(_amount, _tier.price), 0);
+        if (_amountUsdc <= _remainingTierCap) {
+            return (_computeTokens(_amountUsdc, _tier.price), 0);
         } else {
-            uint256 _remainingAmount = _amount - _remainingTierCap;
+            uint256 _remainingAmount = _amountUsdc - _remainingTierCap;
             return (_computeTokens(_remainingTierCap, _tier.price), _remainingAmount);
         }
     }
@@ -518,10 +526,11 @@ contract PublicSale is Ownable, Pausable {
      */
     function _computeTokens(uint256 _amountUSDC, uint256 _price) private pure returns (uint256) {
         // _price = price * 10^18 --> precision scaling
-        // _amount = (input_amount * 10^6 (USDC/T)) * 10^18 (_price)
+        // _amountUSDC = (input_amount * 10^6 (USDC)
         // (_amount * 1e18) / _price = (10^6 * 10^18) / 10^18 = 10^6 precision
         // 10^6 * 10^12 = 10^18 --> scale for future token's decimals
-        return ((_amountUSDC * 1e18) / _price);
+        // SaleToken is enforced to have 18 decimals
+        return ((_amountUSDC * 1e30) / _price);
     }
 
     /**
