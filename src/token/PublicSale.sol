@@ -26,7 +26,7 @@ contract PublicSale is Ownable, Pausable {
     }
 
     struct Purchase {
-        uint256 purchasedTokens; // Total tokens purchased by the user
+        uint128 purchasedTokens; // Total tokens purchased by the user
         uint256 vesting; // Vesting time for the tokens
     }
 
@@ -338,7 +338,7 @@ contract PublicSale is Ownable, Pausable {
      * @param _vestingTime Vesting time for the tokens.
      * @param _start UNIX timestamp of  the `_vestingTime` to start for the tokens.
      */
-    function setVesting(address _user, uint256 _amount, uint256 _vestingTime, uint32 _start) external onlyOwner {
+    function setVesting(address _user, uint128 _amount, uint256 _vestingTime, uint32 _start) external onlyOwner {
         _setVestingHook(_user, _amount, _vestingTime, _start);
     }
 
@@ -430,7 +430,7 @@ contract PublicSale is Ownable, Pausable {
         tiersDeposited[_tierIndex] += depositedAmount_;
 
         _userDepositInfo.amountDeposited += depositedAmount_;
-        _userDepositInfo.purchases[_tierIndex].purchasedTokens += _purchasedTokens;
+        _userDepositInfo.purchases[_tierIndex].purchasedTokens += _safeCastUint128(_purchasedTokens);
 
         uint256 vestingTime = _userDepositInfo.purchases[_tierIndex].vesting;
 
@@ -586,7 +586,7 @@ contract PublicSale is Ownable, Pausable {
      * @param _vesting Vesting time for the tokens.
      * @param _start Vesting start time for the tokens.
      */
-    function _setVestingHook(address _user, uint256 _amount, uint256 _vesting, uint32 _start) private {
+    function _setVestingHook(address _user, uint128 _amount, uint256 _vesting, uint32 _start) private {
         saleToken.safeTransferFrom(treasury, address(this), _amount);
         saleToken.forceApprove(vestingContract, _amount);
         uint32 numberOfSteps = _computeVestingSteps(_vesting);
@@ -618,6 +618,16 @@ contract PublicSale is Ownable, Pausable {
             return 1;
         }
         return uint32((_vesting + DEFAULT_STEP_DURATION - 1) / DEFAULT_STEP_DURATION);
+    }
+
+    /**
+     * @dev Safely cast a uint256 to a uint128.
+     * @param _value The value to cast.
+     * @return The casted value.
+     */
+    function _safeCastUint128(uint256 _value) private pure returns (uint128) {
+        require(_value <= type(uint128).max, "Value exceeds uint128");
+        return uint128(_value);
     }
 
     /**
