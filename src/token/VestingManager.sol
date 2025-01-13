@@ -138,7 +138,7 @@ contract VestingManager is IVestingManager, ERC721 {
 
     function vestSummary(uint256 vestId) external view returns (uint256 remainingVested, uint256 canClaim) {
         Vest memory vest = vests[vestId];
-        uint256 initiallyVested = vest.stepShares * vest.steps;
+        uint256 initiallyVested = vest.stepShares * vest.steps + vest.cliffShares;
         remainingVested = initiallyVested - vest.claimed;
         canClaim = _balanceOf(vest) >= vest.claimed ? _balanceOf(vest) - vest.claimed : 0;
     }
