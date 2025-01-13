@@ -41,10 +41,13 @@ contract VestingManager is IVestingManager, ERC721 {
 
     function tokenURI(uint256 vestId) public view override returns (string memory) {
         string memory uri = vests[vestId].tokenURI;
+        address tokenOwner = ownerOf(vestId);
         if (bytes(uri).length > 0) {
             return uri;
+        } else if (tokenOwner != address(0)) {
+            return "vestId: uri not set";
         } else {
-            revert NoTokenURI();
+            revert ERC721NonexistentToken(vestId);
         }
     }
 
