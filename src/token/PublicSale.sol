@@ -589,11 +589,10 @@ contract PublicSale is Ownable, Pausable {
     function _setVestingHook(address _user, uint256 _amount, uint256 _vesting, uint32 _start) private {
         saleToken.safeTransferFrom(treasury, address(this), _amount);
         saleToken.forceApprove(vestingContract, _amount);
-        uint32 numberOfSteps = uint32(_vesting) / DEFAULT_STEP_DURATION;
-        numberOfSteps = numberOfSteps > 0 ? numberOfSteps : 1;
+        uint32 numberOfSteps = _computeVestingSteps(_vesting);
         uint128 stepPercentage =
             numberOfSteps > 0 ? uint128(PERCENTAGE_PRECISION / numberOfSteps) : uint128(PERCENTAGE_PRECISION);
-        uint32 stepDuration = numberOfSteps > 1 ? DEFAULT_STEP_DURATION : 1;
+        uint32 stepDuration = _vesting == 0 ? 1 : DEFAULT_STEP_DURATION;
         IVestingManager(vestingContract).createVesting(
             VestParams({
                 recipient: _user,
@@ -606,6 +605,19 @@ contract PublicSale is Ownable, Pausable {
                 tokenURI: ""
             })
         );
+    }
+
+    /**
+     * @dev Returns the number of steps required to vest the tokens.
+     * For `_vesting` equal to 0, the function returns 1.
+     * For any other value, the function ceils the division of `_vesting` by `DEFAULT_STEP_DURATION`.
+     * @param _vesting time for the tokens.
+     */
+    function _computeVestingSteps(uint256 _vesting) private pure returns (uint32) {
+        if (_vesting == 0) {
+            return 1;
+        }
+        return uint32((_vesting + DEFAULT_STEP_DURATION - 1) / DEFAULT_STEP_DURATION);
     }
 
     /**
