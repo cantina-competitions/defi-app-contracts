@@ -71,7 +71,7 @@ contract VestingManager is IVestingManager, ERC721 {
         cliffShares = uint128(depositedShares - (stepShares * vestParams.steps));
 
         vestId = vestIds++;
-        _mint(vestParams.recipient, vestId);
+        _safeMint(vestParams.recipient, vestId);
 
         vests[vestId] = Vest({
             owner: msg.sender,
