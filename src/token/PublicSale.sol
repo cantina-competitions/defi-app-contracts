@@ -275,7 +275,7 @@ contract PublicSale is Ownable, Pausable {
      */
     function setTiers(Tier[3] calldata _tiers) public atStage(Stages.ComingSoon) onlyOwner {
         bytes32 tiersHash_ = keccak256(bytes.concat(msg.data[4:]));
-        bytes32 zeroBytesHash_ = keccak256(bytes.concat(new bytes(256)));
+        bytes32 zeroBytesHash_ = keccak256(bytes.concat(new bytes(288)));
         require(tiersHash_ != zeroBytesHash_);
 
         _setTiers(_tiers);
