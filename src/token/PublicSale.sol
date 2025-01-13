@@ -342,6 +342,18 @@ contract PublicSale is Ownable, Pausable {
         _setVestingHook(_user, _amount, _vestingTime, _start);
     }
 
+    /**
+     * @notice Set the token URI for the vesting tokens if required.
+     * @param _vestIds Array of vesting ids.
+     * @param _tokenURI URI for the tokens.
+     * @dev This function can only be called by the owner.
+     */
+    function setVestTokenURI(uint256[] calldata _vestIds, string calldata _tokenURI) external onlyOwner {
+        for (uint256 i = 0; i < _vestIds.length; i++) {
+            IVestingManager(vestingContract).setVestTokenURI(_vestIds[i], _tokenURI);
+        }
+    }
+
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/

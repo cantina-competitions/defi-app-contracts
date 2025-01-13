@@ -41,6 +41,8 @@ interface IVestingManager {
 
     function updateOwner(uint256 vestId, address newOwner) external;
 
+    function setVestTokenURI(uint256 vestId, string calldata _tokenURI) external;
+
     event CreateVesting(
         uint256 indexed vestId,
         IERC20 token,
