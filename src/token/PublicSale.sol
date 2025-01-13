@@ -114,6 +114,8 @@ contract PublicSale is Ownable, Pausable {
 
     uint32 public constant DEFAULT_STEP_DURATION = 30 days;
 
+    uint256 internal constant SAFE_MINIMUM = 10e6;
+
     uint256 internal constant PERCENTAGE_PRECISION = 1e18;
 
     uint256 internal constant MAX_TIERS = 3;
@@ -246,7 +248,7 @@ contract PublicSale is Ownable, Pausable {
      * Emits a {SaleParametersUpdate} event.
      */
     function setSaleParameters(uint256 _minDepositAmount, uint256 _maxDepositAmount) external whenPaused onlyOwner {
-        require(_minDepositAmount < _maxDepositAmount);
+        require(SAFE_MINIMUM < _minDepositAmount && _minDepositAmount < _maxDepositAmount);
 
         saleParameters = SaleParameters(_minDepositAmount, _maxDepositAmount);
         emit SaleParametersUpdate(msg.sender, _minDepositAmount, _maxDepositAmount);
@@ -463,8 +465,8 @@ contract PublicSale is Ownable, Pausable {
      * @dev Throws custom errors if any condition fails.
      */
     function _verifyDepositConditions(uint256 _amount, uint256 _amountDeposited) private view {
-        if (_amount < 10e6) {
-            revert InvalidPurchaseInputHandler(msg.sig, bytes32("_amount"), bytes32("at least"), 10e6);
+        if (_amount < SAFE_MINIMUM) {
+            revert InvalidPurchaseInputHandler(msg.sig, bytes32("_amount"), bytes32("at least"), SAFE_MINIMUM);
         }
 
         SaleParameters memory _saleParameters = saleParameters;
@@ -476,6 +478,8 @@ contract PublicSale is Ownable, Pausable {
         }
 
         uint256 _remainingAmount = _saleParameters.maxDepositAmount - _amountDeposited;
+        if (_remainingAmount < SAFE_MINIMUM) _remainingAmount = SAFE_MINIMUM;
+
         if (_amount > _remainingAmount) {
             revert InvalidPurchaseInputHandler(
                 msg.sig, bytes32("_amount"), bytes32("exceeds maxDepositAmount"), _remainingAmount
@@ -555,6 +559,9 @@ contract PublicSale is Ownable, Pausable {
         if (saleSchedule.start == 0 && saleSchedule.end == 0) return Stages.ComingSoon;
         if (vestingStart != 0) return Stages.ClaimAndVest;
         if (totalFundsCollected >= maxTotalFunds) return Stages.Completed;
+        if (maxTotalFunds > totalFundsCollected && (maxTotalFunds - totalFundsCollected) <= SAFE_MINIMUM) {
+            return Stages.Completed;
+        }
 
         if (block.timestamp < saleSchedule.start) return Stages.ComingSoon;
         if (block.timestamp < saleSchedule.end) return Stages.TokenPurchase;
