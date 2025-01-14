@@ -465,20 +465,21 @@ contract PublicSale is Ownable, Pausable {
      * @dev Throws custom errors if any condition fails.
      */
     function _verifyDepositConditions(uint256 _amount, uint256 _amountDeposited) private view {
+        SaleParameters memory _saleParameters = saleParameters;
+        uint256 _remainingAmount = _saleParameters.maxDepositAmount - _amountDeposited;
+
+        // Allow depositing the exact remaining amount even if it is less than SAFE_MINIMUM
+        if (_remainingAmount < SAFE_MINIMUM && _amount == _remainingAmount) return;
+
         if (_amount < SAFE_MINIMUM) {
             revert InvalidPurchaseInputHandler(msg.sig, bytes32("_amount"), bytes32("at least"), SAFE_MINIMUM);
         }
-
-        SaleParameters memory _saleParameters = saleParameters;
 
         if ((_amount + _amountDeposited) < _saleParameters.minDepositAmount) {
             revert InvalidPurchaseInputHandler(
                 msg.sig, bytes32("_amount"), bytes32("below minDepositAmount"), _saleParameters.minDepositAmount
             );
         }
-
-        uint256 _remainingAmount = _saleParameters.maxDepositAmount - _amountDeposited;
-        if (_remainingAmount < SAFE_MINIMUM) _remainingAmount = SAFE_MINIMUM;
 
         if (_amount > _remainingAmount) {
             revert InvalidPurchaseInputHandler(
