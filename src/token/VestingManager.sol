@@ -5,13 +5,14 @@ import {IVestingManager, VestParams, Vest} from "../interfaces/IVestingManager.s
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title VestingManager Contract
 /// @notice This contract manages the vesting of tokens for users
 /// @dev This contract is used to create, manage and stop vesting of tokens for users
 /// Based on: https://etherscan.deth.net/address/0x0689640d190b10765f09310fCfE9C670eDe4E25B#code
 /// @author security@defi.app
-contract VestingManager is IVestingManager, ERC721 {
+contract VestingManager is IVestingManager, ReentrancyGuard, ERC721 {
     using SafeERC20 for IERC20;
 
     address public immutable vestingAsset;
@@ -60,6 +61,7 @@ contract VestingManager is IVestingManager, ERC721 {
     function createVesting(VestParams calldata vestParams)
         external
         override
+        nonReentrant
         returns (uint256 depositedShares, uint256 vestId, uint128 stepShares, uint128 cliffShares)
     {
         if (vestParams.stepPercentage > PERCENTAGE_PRECISION) {
