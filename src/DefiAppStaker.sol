@@ -8,7 +8,6 @@ import {
     Reward
 } from "./dependencies/MultiFeeDistribution/MFDDataTypes.sol";
 import {DefiAppHomeCenter} from "./DefiAppHomeCenter.sol";
-import {VolatileAMMPoolHelper} from "./periphery/VolatileAMMPoolHelper.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IGauge} from "./interfaces/aerodrome/IGauge.sol";
 
