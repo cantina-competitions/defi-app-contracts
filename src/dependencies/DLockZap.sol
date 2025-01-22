@@ -9,12 +9,12 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {UAccessControl} from "./UAccessControl.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {IMultiFeeDistribution} from "../interfaces/radiant/IMultiFeeDistribution.sol";
-import {ILendingPool, DataTypes} from "../interfaces/radiant/ILendingPool.sol";
-import {IPoolHelper} from "../interfaces/radiant/IPoolHelper.sol";
+import {IMultiFeeDistribution} from "../interfaces/staker/IMultiFeeDistribution.sol";
+import {ILendingPool, DataTypes} from "../interfaces/staker/ILendingPool.sol";
+import {IPoolHelper} from "../interfaces/staker/IPoolHelper.sol";
 import {IWETH9} from "../interfaces/IWETH9.sol";
 import {TransferHelper} from "./helpers/TransferHelper.sol";
-import {IOracleRouter} from "../interfaces/radiant/IOracleRouter.sol";
+import {IOracleRouter} from "../interfaces/staker/IOracleRouter.sol";
 
 /// @title DLockZap contract
 /// @author security@defi.app

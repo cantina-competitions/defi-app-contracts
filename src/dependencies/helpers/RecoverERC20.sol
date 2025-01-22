@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title RecoverERC20 contract
-/// @author Radiant Devs
+/// @author staker Devs
 /// @dev All function calls are currently implemented without side effects
 contract RecoverERC20 {
     using SafeERC20 for IERC20;

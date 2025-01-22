@@ -8,8 +8,8 @@ import {UAccessControl} from "../UAccessControl.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {RecoverERC20} from "../helpers/RecoverERC20.sol";
-import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
-import {IMultiFeeDistribution} from "../../interfaces/radiant/IMultiFeeDistribution.sol";
+import {IBountyManager} from "../../interfaces/staker/IBountyManager.sol";
+import {IMultiFeeDistribution} from "../../interfaces/staker/IMultiFeeDistribution.sol";
 import {
     Balances,
     ClaimableReward,

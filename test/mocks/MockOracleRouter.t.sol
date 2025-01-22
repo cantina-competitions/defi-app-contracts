@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {IOracleRouter} from "../../src/interfaces/radiant/IOracleRouter.sol";
+import {IOracleRouter} from "../../src/interfaces/staker/IOracleRouter.sol";
 
 contract MockOracleRouter is IOracleRouter {
     mapping(address => uint256) internal _mockPrices;
