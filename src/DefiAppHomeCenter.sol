@@ -151,7 +151,7 @@ contract DefiAppHomeCenter is UAccessControl, UUPSUpgradeable {
         return _getDefiAppHomeCenterStorage().votingActive == 1;
     }
 
-    function isMiningActive() external view returns (bool) {
+    function isMintingActive() external view returns (bool) {
         return _getDefiAppHomeCenterStorage().mintingActive == 1;
     }
 
