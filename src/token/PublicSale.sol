@@ -2,6 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {IVestingManager, VestParams} from "../interfaces/IVestingManager.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
@@ -25,7 +26,7 @@ contract PublicSale is Ownable, Pausable {
     }
 
     struct Purchase {
-        uint256 purchasedTokens; // Total tokens purchased by the user
+        uint128 purchasedTokens; // Total tokens purchased by the user
         uint256 vesting; // Vesting time for the tokens
     }
 
@@ -112,6 +113,8 @@ contract PublicSale is Ownable, Pausable {
     error AlreadySet(bytes4 _selector, bytes32 _input);
 
     uint32 public constant DEFAULT_STEP_DURATION = 30 days;
+
+    uint256 internal constant SAFE_MINIMUM = 10e6;
 
     uint256 internal constant PERCENTAGE_PRECISION = 1e18;
 
@@ -226,9 +229,10 @@ contract PublicSale is Ownable, Pausable {
         // Tier prices are scaled by 10^18 to keep precision during division
         _setTiers(
             [
-                Tier(0.01 ether, 1_000_000e6, 720 days), // 0
+                // price, cap, vesting
+                Tier(0.03 ether, 3_000_000e6, 0 days), // 0
                 Tier(0.02 ether, 2_000_000e6, 360 days), // 1
-                Tier(0.03 ether, 3_000_000e6, 0 days) // 2
+                Tier(0.01 ether, 1_000_000e6, 720 days) // 2
             ]
         );
     }
@@ -245,7 +249,7 @@ contract PublicSale is Ownable, Pausable {
      * Emits a {SaleParametersUpdate} event.
      */
     function setSaleParameters(uint256 _minDepositAmount, uint256 _maxDepositAmount) external whenPaused onlyOwner {
-        require(_minDepositAmount < _maxDepositAmount);
+        require(SAFE_MINIMUM < _minDepositAmount && _minDepositAmount < _maxDepositAmount);
 
         saleParameters = SaleParameters(_minDepositAmount, _maxDepositAmount);
         emit SaleParametersUpdate(msg.sender, _minDepositAmount, _maxDepositAmount);
@@ -274,7 +278,7 @@ contract PublicSale is Ownable, Pausable {
      */
     function setTiers(Tier[3] calldata _tiers) public atStage(Stages.ComingSoon) onlyOwner {
         bytes32 tiersHash_ = keccak256(bytes.concat(msg.data[4:]));
-        bytes32 zeroBytesHash_ = keccak256(bytes.concat(new bytes(256)));
+        bytes32 zeroBytesHash_ = keccak256(bytes.concat(new bytes(288)));
         require(tiersHash_ != zeroBytesHash_);
 
         _setTiers(_tiers);
@@ -292,10 +296,11 @@ contract PublicSale is Ownable, Pausable {
 
     /**
      * @notice Set the sale token.
-     * @param _saleToken Address of the token to be sold.
+     * @param _saleToken Address of the token to be sold
      * @param _vestingContract Address of the vesting contract.
      * @param _vestingStart UNIX timestamp of the vesting start.
      * @dev This function can only be called by `owner` and only once.
+     * _saleToken must be 18 decimals.
      */
     function setVestingReady(IERC20 _saleToken, address _vestingContract, uint32 _vestingStart)
         external
@@ -319,6 +324,8 @@ contract PublicSale is Ownable, Pausable {
             address(_saleToken) == IVestingManager(_vestingContract).vestingAsset(),
             InvalidInput(this.setVestingReady.selector, bytes32(uint256(uint160(address(_saleToken)))))
         );
+        uint256 saleTokenDecimals = ERC20(address(_saleToken)).decimals();
+        require(saleTokenDecimals == 18, InvalidInput(this.setVestingReady.selector, bytes32(saleTokenDecimals)));
 
         saleToken = _saleToken;
         vestingContract = _vestingContract;
@@ -334,12 +341,20 @@ contract PublicSale is Ownable, Pausable {
      * @param _vestingTime Vesting time for the tokens.
      * @param _start UNIX timestamp of  the `_vestingTime` to start for the tokens.
      */
-    function setVesting(address _user, uint256 _amount, uint256 _vestingTime, uint32 _start)
-        external
-        atStage(Stages.Completed)
-        onlyOwner
-    {
+    function setVesting(address _user, uint128 _amount, uint256 _vestingTime, uint32 _start) external onlyOwner {
         _setVestingHook(_user, _amount, _vestingTime, _start);
+    }
+
+    /**
+     * @notice Set the token URI for the vesting tokens if required.
+     * @param _vestIds Array of vesting ids.
+     * @param _tokenURI URI for the tokens.
+     * @dev This function can only be called by the owner.
+     */
+    function setVestTokenURI(uint256[] calldata _vestIds, string calldata _tokenURI) external onlyOwner {
+        for (uint256 i = 0; i < _vestIds.length; i++) {
+            IVestingManager(vestingContract).setVestTokenURI(_vestIds[i], _tokenURI);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -430,7 +445,7 @@ contract PublicSale is Ownable, Pausable {
         tiersDeposited[_tierIndex] += depositedAmount_;
 
         _userDepositInfo.amountDeposited += depositedAmount_;
-        _userDepositInfo.purchases[_tierIndex].purchasedTokens += _purchasedTokens;
+        _userDepositInfo.purchases[_tierIndex].purchasedTokens += _safeCastUint128(_purchasedTokens);
 
         uint256 vestingTime = _userDepositInfo.purchases[_tierIndex].vesting;
 
@@ -451,11 +466,15 @@ contract PublicSale is Ownable, Pausable {
      * @dev Throws custom errors if any condition fails.
      */
     function _verifyDepositConditions(uint256 _amount, uint256 _amountDeposited) private view {
-        if (_amount < 10e6) {
-            revert InvalidPurchaseInputHandler(msg.sig, bytes32("_amount"), bytes32("at least"), 10e6);
-        }
-
         SaleParameters memory _saleParameters = saleParameters;
+        uint256 _remainingAmount = _saleParameters.maxDepositAmount - _amountDeposited;
+
+        // Allow depositing the exact remaining amount even if it is less than SAFE_MINIMUM
+        if (_remainingAmount < SAFE_MINIMUM && _amount == _remainingAmount) return;
+
+        if (_amount < SAFE_MINIMUM) {
+            revert InvalidPurchaseInputHandler(msg.sig, bytes32("_amount"), bytes32("at least"), SAFE_MINIMUM);
+        }
 
         if ((_amount + _amountDeposited) < _saleParameters.minDepositAmount) {
             revert InvalidPurchaseInputHandler(
@@ -463,7 +482,6 @@ contract PublicSale is Ownable, Pausable {
             );
         }
 
-        uint256 _remainingAmount = _saleParameters.maxDepositAmount - _amountDeposited;
         if (_amount > _remainingAmount) {
             revert InvalidPurchaseInputHandler(
                 msg.sig, bytes32("_amount"), bytes32("exceeds maxDepositAmount"), _remainingAmount
@@ -477,6 +495,7 @@ contract PublicSale is Ownable, Pausable {
      * @dev Emits a {TiersUpdate} event if the new tiers are set.
      */
     function _setTiers(Tier[MAX_TIERS] memory _tiers) private {
+        maxTotalFunds = 0;
         for (uint256 i = 0; i < MAX_TIERS; i++) {
             _checkTierVestDuration(_tiers[i]);
             tiers[i] = _tiers[i];
@@ -490,13 +509,17 @@ contract PublicSale is Ownable, Pausable {
     /**
      * @notice Calculates the number of tokens to transfer based on the deposited amount and tiers.
      * @dev This function accounts for multiple tiers and computes tokens across them if necessary.
-     * @param _amount The amount USDC deposited by the user.
+     * @param _amountUsdc The amount USDC deposited by the user.
      * @param _tierIndex The index tier to purchase.
      * @return A tuple containing:
      *         - `resultingTokens_` The total number of tokens purchased.
      *         - `remainingAmount_` The remaining amount after token computation.
      */
-    function _calculateTokensToTransfer(uint256 _amount, uint256 _tierIndex) private view returns (uint256, uint256) {
+    function _calculateTokensToTransfer(uint256 _amountUsdc, uint256 _tierIndex)
+        private
+        view
+        returns (uint256, uint256)
+    {
         Tier memory _tier = tiers[_tierIndex];
         uint256 _remainingTierCap = _tier.cap - tiersDeposited[_tierIndex];
 
@@ -504,10 +527,10 @@ contract PublicSale is Ownable, Pausable {
             revert InvalidPurchaseInput(this.depositUSDC.selector, "_tierIndex", "tier cap reached");
         }
 
-        if (_amount <= _remainingTierCap) {
-            return (_computeTokens(_amount, _tier.price), 0);
+        if (_amountUsdc <= _remainingTierCap) {
+            return (_computeTokens(_amountUsdc, _tier.price), 0);
         } else {
-            uint256 _remainingAmount = _amount - _remainingTierCap;
+            uint256 _remainingAmount = _amountUsdc - _remainingTierCap;
             return (_computeTokens(_remainingTierCap, _tier.price), _remainingAmount);
         }
     }
@@ -518,10 +541,11 @@ contract PublicSale is Ownable, Pausable {
      */
     function _computeTokens(uint256 _amountUSDC, uint256 _price) private pure returns (uint256) {
         // _price = price * 10^18 --> precision scaling
-        // _amount = (input_amount * 10^6 (USDC/T)) * 10^18 (_price)
+        // _amountUSDC = (input_amount * 10^6 (USDC)
         // (_amount * 1e18) / _price = (10^6 * 10^18) / 10^18 = 10^6 precision
         // 10^6 * 10^12 = 10^18 --> scale for future token's decimals
-        return ((_amountUSDC * 1e18) / _price);
+        // SaleToken is enforced to have 18 decimals
+        return ((_amountUSDC * 1e30) / _price);
     }
 
     /**
@@ -537,6 +561,9 @@ contract PublicSale is Ownable, Pausable {
         if (saleSchedule.start == 0 && saleSchedule.end == 0) return Stages.ComingSoon;
         if (vestingStart != 0) return Stages.ClaimAndVest;
         if (totalFundsCollected >= maxTotalFunds) return Stages.Completed;
+        if (maxTotalFunds > totalFundsCollected && (maxTotalFunds - totalFundsCollected) <= SAFE_MINIMUM) {
+            return Stages.Completed;
+        }
 
         if (block.timestamp < saleSchedule.start) return Stages.ComingSoon;
         if (block.timestamp < saleSchedule.end) return Stages.TokenPurchase;
@@ -580,14 +607,13 @@ contract PublicSale is Ownable, Pausable {
      * @param _vesting Vesting time for the tokens.
      * @param _start Vesting start time for the tokens.
      */
-    function _setVestingHook(address _user, uint256 _amount, uint256 _vesting, uint32 _start) private {
+    function _setVestingHook(address _user, uint128 _amount, uint256 _vesting, uint32 _start) private {
         saleToken.safeTransferFrom(treasury, address(this), _amount);
         saleToken.forceApprove(vestingContract, _amount);
-        uint32 numberOfSteps = uint32(_vesting) / DEFAULT_STEP_DURATION;
-        numberOfSteps = numberOfSteps > 0 ? numberOfSteps : 1;
+        uint32 numberOfSteps = _computeVestingSteps(_vesting);
         uint128 stepPercentage =
             numberOfSteps > 0 ? uint128(PERCENTAGE_PRECISION / numberOfSteps) : uint128(PERCENTAGE_PRECISION);
-        uint32 stepDuration = numberOfSteps > 1 ? DEFAULT_STEP_DURATION : 1;
+        uint32 stepDuration = _vesting == 0 ? 1 : DEFAULT_STEP_DURATION;
         IVestingManager(vestingContract).createVesting(
             VestParams({
                 recipient: _user,
@@ -600,6 +626,29 @@ contract PublicSale is Ownable, Pausable {
                 tokenURI: ""
             })
         );
+    }
+
+    /**
+     * @dev Returns the number of steps required to vest the tokens.
+     * For `_vesting` equal to 0, the function returns 1.
+     * For any other value, the function ceils the division of `_vesting` by `DEFAULT_STEP_DURATION`.
+     * @param _vesting time for the tokens.
+     */
+    function _computeVestingSteps(uint256 _vesting) private pure returns (uint32) {
+        if (_vesting == 0) {
+            return 1;
+        }
+        return uint32((_vesting + DEFAULT_STEP_DURATION - 1) / DEFAULT_STEP_DURATION);
+    }
+
+    /**
+     * @dev Safely cast a uint256 to a uint128.
+     * @param _value The value to cast.
+     * @return The casted value.
+     */
+    function _safeCastUint128(uint256 _value) private pure returns (uint128) {
+        require(_value <= type(uint128).max, "Value exceeds uint128");
+        return uint128(_value);
     }
 
     /**

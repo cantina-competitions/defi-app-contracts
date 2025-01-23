@@ -5,13 +5,14 @@ import {IVestingManager, VestParams, Vest} from "../interfaces/IVestingManager.s
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title VestingManager Contract
 /// @notice This contract manages the vesting of tokens for users
 /// @dev This contract is used to create, manage and stop vesting of tokens for users
 /// Based on: https://etherscan.deth.net/address/0x0689640d190b10765f09310fCfE9C670eDe4E25B#code
 /// @author security@defi.app
-contract VestingManager is IVestingManager, ERC721 {
+contract VestingManager is IVestingManager, ReentrancyGuard, ERC721 {
     using SafeERC20 for IERC20;
 
     address public immutable vestingAsset;
@@ -23,7 +24,6 @@ contract VestingManager is IVestingManager, ERC721 {
     uint256 public constant PERCENTAGE_PRECISION = 1e18;
 
     // custom errors
-    error InvalidStart();
     error NotOwner();
     error NotVestReceiver();
     error InvalidStepSetting();
@@ -42,10 +42,13 @@ contract VestingManager is IVestingManager, ERC721 {
 
     function tokenURI(uint256 vestId) public view override returns (string memory) {
         string memory uri = vests[vestId].tokenURI;
+        address tokenOwner = ownerOf(vestId);
         if (bytes(uri).length > 0) {
             return uri;
+        } else if (tokenOwner != address(0)) {
+            return "vestId: uri not set";
         } else {
-            revert NoTokenURI();
+            revert ERC721NonexistentToken(vestId);
         }
     }
 
@@ -58,9 +61,9 @@ contract VestingManager is IVestingManager, ERC721 {
     function createVesting(VestParams calldata vestParams)
         external
         override
+        nonReentrant
         returns (uint256 depositedShares, uint256 vestId, uint128 stepShares, uint128 cliffShares)
     {
-        if (vestParams.start < block.timestamp) revert InvalidStart();
         if (vestParams.stepPercentage > PERCENTAGE_PRECISION) {
             revert InvalidStepSetting();
         }
@@ -73,7 +76,7 @@ contract VestingManager is IVestingManager, ERC721 {
         cliffShares = uint128(depositedShares - (stepShares * vestParams.steps));
 
         vestId = vestIds++;
-        _mint(vestParams.recipient, vestId);
+        _safeMint(vestParams.recipient, vestId);
 
         vests[vestId] = Vest({
             owner: msg.sender,
@@ -140,7 +143,7 @@ contract VestingManager is IVestingManager, ERC721 {
 
     function vestSummary(uint256 vestId) external view returns (uint256 remainingVested, uint256 canClaim) {
         Vest memory vest = vests[vestId];
-        uint256 initiallyVested = vest.stepShares * vest.steps;
+        uint256 initiallyVested = vest.stepShares * vest.steps + vest.cliffShares;
         remainingVested = initiallyVested - vest.claimed;
         canClaim = _balanceOf(vest) >= vest.claimed ? _balanceOf(vest) - vest.claimed : 0;
     }
