@@ -129,23 +129,12 @@ contract BasicFixture is Test {
         return center;
     }
 
-    function deploy_lockzap(
-        address deployer,
-        address emissionToken,
-        address weth9,
-        address mfd,
-        address poolHelper,
-        uint256 lpRatio,
-        address oracleRouter
-    ) internal returns (DLockZap) {
-        DLockZapInitializerParams memory params = DLockZapInitializerParams({
-            emissionToken: emissionToken,
-            weth9: weth9,
-            mfd: mfd,
-            poolHelper: poolHelper,
-            lpRatio: lpRatio,
-            oracleRouter: oracleRouter
-        });
+    function deploy_lockzap(address deployer, address emissionToken, address weth9, address mfd, address poolHelper)
+        internal
+        returns (DLockZap)
+    {
+        DLockZapInitializerParams memory params =
+            DLockZapInitializerParams({emissionToken: emissionToken, weth9: weth9, mfd: mfd, poolHelper: poolHelper});
 
         vm.startPrank(deployer);
         DLockZap zapper = DLockZapDeployer.deploy(fs, "DLockZap", TESTING_ONLY, false, params);

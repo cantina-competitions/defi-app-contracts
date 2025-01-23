@@ -86,15 +86,8 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
         oracleRouter.mock_set_price(address(weth9), WETH_USD_PRICE);
         center = deploy_defiapp_homecenter(Admin.addr, address(homeToken), staker, address(vAmmPoolHelper));
 
-        lockzap = deploy_lockzap(
-            Admin.addr,
-            address(homeToken),
-            address(weth9),
-            address(staker),
-            address(vAmmPoolHelper),
-            5000,
-            address(oracleRouter)
-        );
+        lockzap =
+            deploy_lockzap(Admin.addr, address(homeToken), address(weth9), address(staker), address(vAmmPoolHelper));
     }
 
     function test_userFlowZapIntoStakingOnlyWeth9() public {
@@ -109,10 +102,7 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
             (,, uint256 minLpTokens) = vAmmPoolHelper.quoteAddLiquidity(0, amount);
             console.log("minLpTokens", minLpTokens);
             lpAmount = lockzap.zap(
-                false, // borrow
-                address(0), // lendingPool
-                address(weth9), // asset: to zap with
-                amount, // assetAmt
+                amount, // weth9Amt
                 0, // emissionTokenAmt
                 ONE_MONTH_TYPE_INDEX, // lockTypeIndex
                 minLpTokens // slippage check
@@ -141,10 +131,7 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
             homeToken.approve(address(lockzap), homeAmt);
             (,, uint256 minLpTokens) = vAmmPoolHelper.quoteAddLiquidity(homeAmt, weth9Amt);
             lpAmount = lockzap.zap(
-                false, // borrow
-                address(0), // lendingPool
-                address(weth9), // asset: to zap with
-                weth9Amt, // assetAmt
+                weth9Amt, // weth9Amt
                 homeAmt, // emissionTokenAmt
                 ONE_MONTH_TYPE_INDEX, // lockTypeIndex
                 minLpTokens // slippage check
@@ -170,10 +157,7 @@ contract TestUserIntegratedFlows is MockAerodromeFixture, TestMerkleConstants {
             weth9.approve(address(lockzap), amount);
             (,, uint256 minLpTokens) = vAmmPoolHelper.quoteAddLiquidity(0, amount);
             lpAmount = lockzap.zap(
-                false, // borrow
-                address(0), // lendingPool
-                address(weth9), // asset: to zap with
-                amount, // assetAmt
+                amount, // weth9Amt
                 0, // emissionTokenAmt
                 THREE_MONTH_TYPE_INDEX, // lockTypeIndex
                 minLpTokens // slippage check
