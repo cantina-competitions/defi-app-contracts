@@ -12,7 +12,6 @@ contract PublicSaleFixture is BasicFixture {
     VestingManager public vestingManager;
     PublicSale public publicSale;
     MockToken public vestingAsset;
-    MockUsdc public usdc;
 
     uint128 public constant FULL_PERCENTAGE = 1e18;
     uint32 public constant TEST_TIMESTAMP = 1735718400;
@@ -34,7 +33,6 @@ contract PublicSaleFixture is BasicFixture {
     function setUp() public virtual override {
         super.setUp();
         vestingAsset = deploy_mock_tocken("Test Sale Asset", "tsSALE");
-        usdc = new MockUsdc();
 
         publicSale = PublicSaleDeployer.deploy(
             fs,

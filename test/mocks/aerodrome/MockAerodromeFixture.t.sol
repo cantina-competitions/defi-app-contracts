@@ -23,8 +23,8 @@ contract MockAerodromeFixture is BasicFixture {
         returns (address poolFactory, address router)
     {
         vm.startPrank(admin);
-        MockPool pool = new MockPool();
-        MockPoolFactory poolFactory_ = new MockPoolFactory(address(pool));
+        MockPool poolImp = new MockPool();
+        MockPoolFactory poolFactory_ = new MockPoolFactory(address(poolImp));
         MockGaugeFactory gaugeFactory_ = new MockGaugeFactory();
         MockFactoryRegistry factoryRegistry_ = new MockFactoryRegistry(
             address(poolFactory_),

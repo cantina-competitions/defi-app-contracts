@@ -5,7 +5,6 @@ import "../script/foundry/deploy-libraries/_Index.s.sol";
 import {console} from "forge-std/console.sol";
 import {TestMerkleConstants} from "./merkle-sample/TestMerkleConstants.t.sol";
 import {MockToken} from "./mocks/MockToken.t.sol";
-import {MockWeth9} from "./mocks/MockWeth9.t.sol";
 import {MockOracleRouter} from "./mocks/MockOracleRouter.t.sol";
 import {
     MockAerodromeFixture,
@@ -35,8 +34,6 @@ contract StakingFixture is MockAerodromeFixture, TestMerkleConstants {
     uint256 public constant INIT_PRICE = (INITIAL_PAIR_AMT * 1e8) / INITIAL_WETH9_AMT; // INIT_PRICE = (emitToken / weth9); in 8 decimals
     uint256 public constant EIGHT_DECIMALS = 1e8;
     // Mocks
-    MockToken public homeToken;
-    MockWeth9 public weth9;
     MockPool public pool;
     MockPoolFactory public poolFactory;
     MockRouter public router;
@@ -50,11 +47,6 @@ contract StakingFixture is MockAerodromeFixture, TestMerkleConstants {
 
     function setUp() public virtual override {
         super.setUp();
-
-        weth9 = new MockWeth9();
-        homeToken = deploy_mock_tocken("Test Home", "tsHOME");
-        vm.label(address(weth9), "Weth9");
-        vm.label(address(homeToken), "HomeToken");
 
         (address poolFactory_, address router_) = deploy_mock_aerodrome(Admin.addr, address(weth9));
         poolFactory = MockPoolFactory(poolFactory_);

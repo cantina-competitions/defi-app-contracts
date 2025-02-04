@@ -19,7 +19,6 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
     VolatileAMMPoolHelper public vAmmPoolHelper;
 
     MockToken public emissionToken;
-    MockToken public weth9;
     MockPoolFactory public poolFactory;
     MockRouter public router;
 
@@ -32,11 +31,7 @@ contract TestUnitVolatileAMMPoolHelper is MockAerodromeFixture {
 
     function setUp() public override {
         super.setUp();
-        weth9 = deploy_mock_tocken("Mock Weth9", "WETH9");
-        emissionToken = deploy_mock_tocken("Test Home", "tsHOME");
-
-        vm.label(address(emissionToken), "HomeToken");
-        vm.label(address(weth9), "Weth9");
+        emissionToken = homeToken;
 
         (address poolFactory_, address router_) = deploy_mock_aerodrome(Admin.addr, address(weth9));
         poolFactory = MockPoolFactory(poolFactory_);
