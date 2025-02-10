@@ -29,6 +29,16 @@ Methods:
 - `DefiAppHomeCenter.claim(...)`: allows a user to claim emission tokens for a specific epoch with option to directly stake.
 - `DefiAppHomeCenter.claimMulti(...)`: allows a user to claim emission tokens for multiple epochs with option to directly stake.
 
-**Actor: Admin**
+**Actor: Admin**  (for all purpose consider Admin a multisig with various signers and an intermediary timelock to execute txs)
 
-Various setters and configuration parameters in `DefiAppStaker.sol`, `DefiAppHomeCenter.sol`, `VolatileAMMPoolHelper.sol`.
+- `DLockZap.setMfd(...)`: Sets reference to the active DefiAppStaker.sol contract.
+- `DLockZap.setPoolHelper(...)`: Sets reference to the VolatileAMMPoolHelper.sol that helps interfacing with Aerodrome pool and gauge.
+- `DefiAppStaker.setHomeCenter(...)`: Sets reference to the DefiAppHomeCenter.sol
+- `DefiAppStaker.setGauge(...)`: Sets reference to the DefiAppHomeCenter.sol
+- `DefiAppStaker.setDefaultLockIndex(...)`: Sets the standard lock durations available
+- `DefiAppStaker.setRewardDistributors(...)`: Sets the address(es) allowed to add and remove rewards to the DefiAppStaker.sol contract. Rewards are those to be distributed to stakers.
+- `DefiAppStaker.setRewardStreamParams(...)`: Sets the parameters for streaming rewards to stakers.
+- `DefiAppStaker.setOperationExpenses(...)`: Sets the address that receives and the percentage of rewards dedicated to operational expenses.
+- `DefiAppHomeCenter.setDefaultRps(...)`: Sets the rate at which emission token is distributed in the epoch.
+- `DefiAppHomeCenter.setDefaultEpochDuration(...)`: Sets the time length of an epoch. Only affecting the upcoming epoch. setVoting(...): Sets voting is active when features gets built and enabled.
+- `DefiAppHomeCenter.setMintingActive(...)`: Configuration param that indicates the DefiAppHomeCenter.sol contract that emission token is distributed by minting. 
