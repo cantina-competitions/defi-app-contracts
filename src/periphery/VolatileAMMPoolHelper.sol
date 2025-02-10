@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IPoolHelper} from "../interfaces/radiant/IPoolHelper.sol";
+import {IPoolHelper} from "../interfaces/staker/IPoolHelper.sol";
 import {IPoolFactory} from "../interfaces/aerodrome/IPoolFactory.sol";
 import {IPool} from "../interfaces/aerodrome/IPool.sol";
 import {IRouter} from "../interfaces/aerodrome/IRouter.sol";

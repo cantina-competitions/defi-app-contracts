@@ -11,8 +11,6 @@ struct DLockZapInitializerParams {
     address weth9;
     address mfd;
     address poolHelper;
-    uint256 lpRatio;
-    address oracleRouter;
 }
 
 library DLockZapDeployer {
@@ -34,13 +32,7 @@ library DLockZapDeployer {
             return instance;
         } else {
             bytes memory initData = abi.encodeWithSelector(
-                DLockZap.initialize.selector,
-                params.emissionToken,
-                params.weth9,
-                params.mfd,
-                params.poolHelper,
-                params.lpRatio,
-                params.oracleRouter
+                DLockZap.initialize.selector, params.emissionToken, params.weth9, params.mfd, params.poolHelper
             );
             return DLockZap(
                 payable(ERC1967ProxyDeployer.deploy(fs, contractLabel, forTesting, address(instance), initData))

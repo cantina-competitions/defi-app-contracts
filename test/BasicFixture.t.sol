@@ -6,6 +6,8 @@ import "../script/foundry/deploy-libraries/_Index.s.sol";
 import {FileSystem} from "../script/foundry/utils/FileSystem.s.sol";
 import {VmSafe} from "forge-std/StdUtils.sol";
 import {MockToken} from "./mocks/MockToken.t.sol";
+import {MockWeth9} from "./mocks/MockWeth9.t.sol";
+import {MockUsdc} from "./mocks/MockUsdc.t.sol";
 import {MockOracleRouter} from "./mocks/MockOracleRouter.t.sol";
 import {IWETH9} from "../src/interfaces/IWETH9.sol";
 import {DefiAppStaker} from "../src/DefiAppStaker.sol";
@@ -26,6 +28,11 @@ contract BasicFixture is Test {
     VmSafe.Wallet public User4;
     VmSafe.Wallet public Admin;
     VmSafe.Wallet public Treasury;
+
+    /// Tokens
+    MockWeth9 public weth9;
+    MockUsdc public usdc;
+    MockToken public homeToken;
 
     FileSystem public fs;
 
@@ -59,6 +66,14 @@ contract BasicFixture is Test {
         User4 = vm.createWallet("User4");
         Admin = vm.createWallet("Admin");
         Treasury = vm.createWallet("Treasury");
+
+        weth9 = new MockWeth9();
+        usdc = new MockUsdc();
+        homeToken = deploy_mock_tocken("Test Home", "tsHOME");
+
+        vm.label(address(weth9), "mWeth9");
+        vm.label(address(usdc), "mUSDC");
+        vm.label(address(homeToken), "HomeToken");
 
         fs = new FileSystem();
     }
@@ -129,23 +144,12 @@ contract BasicFixture is Test {
         return center;
     }
 
-    function deploy_lockzap(
-        address deployer,
-        address emissionToken,
-        address weth9,
-        address mfd,
-        address poolHelper,
-        uint256 lpRatio,
-        address oracleRouter
-    ) internal returns (DLockZap) {
-        DLockZapInitializerParams memory params = DLockZapInitializerParams({
-            emissionToken: emissionToken,
-            weth9: weth9,
-            mfd: mfd,
-            poolHelper: poolHelper,
-            lpRatio: lpRatio,
-            oracleRouter: oracleRouter
-        });
+    function deploy_lockzap(address deployer, address emissionToken, address weth9_, address mfd, address poolHelper)
+        internal
+        returns (DLockZap)
+    {
+        DLockZapInitializerParams memory params =
+            DLockZapInitializerParams({emissionToken: emissionToken, weth9: weth9_, mfd: mfd, poolHelper: poolHelper});
 
         vm.startPrank(deployer);
         DLockZap zapper = DLockZapDeployer.deploy(fs, "DLockZap", TESTING_ONLY, false, params);
@@ -155,9 +159,9 @@ contract BasicFixture is Test {
         return zapper;
     }
 
-    function load_weth9(address user, uint256 amount, IWETH9 weth9) internal {
+    function load_weth9(address user, uint256 amount, IWETH9 weth9_) internal {
         vm.deal(user, amount);
         vm.prank(user);
-        weth9.deposit{value: amount}();
+        weth9_.deposit{value: amount}();
     }
 }

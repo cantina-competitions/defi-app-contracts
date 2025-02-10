@@ -3,21 +3,11 @@ pragma solidity ^0.8.0;
 
 import "../../script/foundry/deploy-libraries/_Index.s.sol";
 import {console} from "forge-std/console.sol";
-import {BasicFixture, MockToken} from "../BasicFixture.t.sol";
+import {PublicSaleFixture} from "../PublicSaleFixture.t.sol";
 import {MockUsdc} from "../mocks/MockUsdc.t.sol";
 import {VestingManager, VestParams, Vest} from "../../src/token/VestingManager.sol";
 
-contract TestUnitVestingManager is BasicFixture {
-    MockToken public vestingAsset;
-    MockUsdc public usdc;
-
-    VestingManager public vestingManager;
-
-    uint128 public constant FULL_PERCENTAGE = 1e18;
-    uint32 public constant TEST_TIMESTAMP = 1735718400;
-    uint32 public constant TEST_STEP_DURATION = 10 minutes;
-    uint32 public constant TEST_STEPS = 20;
-
+contract TestUnitVestingManager is PublicSaleFixture {
     function setUp() public override {
         super.setUp();
         vestingAsset = deploy_mock_tocken("Vesting Asset", "tsVest");

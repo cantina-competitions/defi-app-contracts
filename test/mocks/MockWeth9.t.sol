@@ -18,6 +18,10 @@ contract MockWeth9 is IWETH9 {
         deposit();
     }
 
+    function mint(address to, uint256 amount) public {
+        balanceOf[to] += amount;
+    }
+
     function deposit() public payable {
         balanceOf[msg.sender] += msg.value;
         emit Deposit(msg.sender, msg.value);

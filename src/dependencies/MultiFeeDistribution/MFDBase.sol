@@ -8,8 +8,8 @@ import {UAccessControl} from "../UAccessControl.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {RecoverERC20} from "../helpers/RecoverERC20.sol";
-import {IBountyManager} from "../../interfaces/radiant/IBountyManager.sol";
-import {IMultiFeeDistribution} from "../../interfaces/radiant/IMultiFeeDistribution.sol";
+import {IBountyManager} from "../../interfaces/staker/IBountyManager.sol";
+import {IMultiFeeDistribution} from "../../interfaces/staker/IMultiFeeDistribution.sol";
 import {
     Balances,
     ClaimableReward,
@@ -285,9 +285,9 @@ contract MFDBase is
      * @param _typeIndex lock type index.
      */
     function stake(uint256 _amount, address _onBehalf, uint256 _typeIndex) external whenNotPaused {
-        _beforeStakeHook(_amount, _onBehalf, _typeIndex);
+        _beforeStakeHook(_amount, _onBehalf);
         MFDLogic.stakeLogic(_getMFDBaseStorage(), _amount, _onBehalf, _typeIndex, false);
-        _afterStakeHook(_amount, _onBehalf, _typeIndex);
+        _afterStakeHook(_amount);
     }
 
     /**
@@ -325,7 +325,7 @@ contract MFDBase is
     function withdrawExpiredLocks() external whenNotPaused returns (uint256) {
         uint256 unlocked = getUserBalances(msg.sender).unlocked;
         if (unlocked == 0) revert AmountZero();
-        _beforeWithdrawExpiredLocks(unlocked, msg.sender);
+        _beforeWithdrawExpiredLocks(unlocked);
         MultiFeeDistributionStorage storage $ = _getMFDBaseStorage();
         return MFDLogic.handleWithdrawOrRelockLogic($, msg.sender, false, $.userLocks[msg.sender].length);
     }
@@ -352,7 +352,7 @@ contract MFDBase is
         trackUnseenRewards();
 
         // Withdraw the user's expried locks
-        _beforeWithdrawExpiredLocks(unlocked, _user);
+        _beforeWithdrawExpiredLocks(unlocked);
         MFDLogic.handleWithdrawOrRelockLogic($, _user, !$.autoRelockDisabled[_user], $.userLocks[_user].length);
     }
 
@@ -727,11 +727,11 @@ contract MFDBase is
         if (_amount == 0) revert AmountZero();
     }
 
-    function _beforeStakeHook(uint256 _amount, address _onBehalf, uint256 indexType) internal virtual {}
+    function _beforeStakeHook(uint256 _amount, address _onBehalf) internal virtual {}
 
-    function _afterStakeHook(uint256 _amount, address _onBehalf, uint256 indexType) internal virtual {}
+    function _afterStakeHook(uint256 _amount) internal virtual {}
 
-    function _beforeWithdrawExpiredLocks(uint256 _amount, address _onBehalf) internal virtual {}
+    function _beforeWithdrawExpiredLocks(uint256 _amount) internal virtual {}
 
     function _authorizeUpgrade(address) internal view override onlyRole(UPGRADER_ROLE) {}
 }

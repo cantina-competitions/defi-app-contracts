@@ -48,7 +48,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture, TestMerkleConstants {
         assertEq(0, center.getCurrentEpoch());
         assertEq(address(center), address(staker.getHomeCenter()));
         assertEq(false, center.isVotingLive());
-        assertEq(false, center.isMiningActive());
+        assertEq(false, center.isMintingActive());
     }
 
     function test_defiAppHomerCenterPermissionedSetters(address someone) public {
@@ -67,7 +67,7 @@ contract TestUnitDefiAppHomeCenter is BasicFixture, TestMerkleConstants {
             assertEq(DEFAULT_RPS * 2, center.getDefaultRps());
             assertEq(DEFAULT_EPOCH_DURATION * 2, center.getDefaultEpochDuration());
             assertEq(true, center.isVotingLive());
-            assertEq(true, center.isMiningActive());
+            assertEq(true, center.isMintingActive());
         } else {
             vm.startPrank(someone);
             vm.expectRevert(

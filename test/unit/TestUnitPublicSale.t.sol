@@ -1,52 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import "../../script/foundry/deploy-libraries/_Index.s.sol";
 import {console} from "forge-std/console.sol";
-import {BasicFixture, MockToken} from "../BasicFixture.t.sol";
-import {MockUsdc} from "../mocks/MockUsdc.t.sol";
+import {PublicSaleFixture} from "../PublicSaleFixture.t.sol";
+import {MockToken} from "../mocks/MockToken.t.sol";
 import {VestingManager, VestParams, Vest} from "../../src/token/VestingManager.sol";
 import {PublicSale} from "../../src/token/PublicSale.sol";
 
-contract TestUnitPublicSale is BasicFixture {
-    MockToken public saleAsset;
-    MockUsdc public usdc;
-
-    VestingManager public vestingManager;
-    PublicSale public publicSale;
-
-    uint128 public constant FULL_PERCENTAGE = 1e18;
-    uint32 public constant TEST_TIMESTAMP = 1735718400;
-    // uint32 public constant TEST_STEP_DURATION = 10 minutes;
-    // uint32 public constant TEST_STEPS = 20;
-
-    uint256 public constant MIN_DEPOSIT_AMOUNT = 250 * 1e6;
-    uint256 public constant MAX_DEPOSIT_AMOUNT = 100_000 * 1e6;
-    uint256 public constant SALE_START = TEST_TIMESTAMP + 7 days;
-    uint256 public constant SALE_END = TEST_TIMESTAMP + 14 days;
-
-    uint256 public constant TIER_1 = 0;
-    uint256 public constant TIER_2 = 1;
-    uint256 public constant TIER_3 = 2;
-
+contract TestUnitPublicSale is PublicSaleFixture {
     function setUp() public override {
         super.setUp();
-        saleAsset = deploy_mock_tocken("Sale Token", "sTKN");
-        usdc = new MockUsdc();
-
-        publicSale = PublicSaleDeployer.deploy(
-            fs,
-            "PublicSale",
-            TESTING_ONLY,
-            PublicSaleInitParams({admin: Admin.addr, treasury: Admin.addr, usdc: address(usdc)})
-        );
-
-        vestingManager = VestingManagerDeployer.deploy(
-            fs,
-            "VestingManager",
-            TESTING_ONLY,
-            VestingManagerInitParams({vestAsset: address(saleAsset), name: "Vesting Manager", symbol: "VM"})
-        );
     }
 
     function test_publicSaleStageAtDeploy() public view {
@@ -245,22 +208,22 @@ contract TestUnitPublicSale is BasicFixture {
         publicSale.claimAndStartVesting();
 
         vm.prank(Admin.addr);
-        publicSale.setVestingReady(saleAsset, address(vestingManager), uint32(SALE_END + 2));
+        publicSale.setVestingReady(vestingAsset, address(vestingManager), uint32(SALE_END + 2));
 
         assertEq(uint8(publicSale.getCurrentStage()), uint8(PublicSale.Stages.ClaimAndVest));
 
         uint256 soldTokens = publicSale.totalTokensPurchased();
-        saleAsset.mint(address(Admin.addr), soldTokens);
+        vestingAsset.mint(address(Admin.addr), soldTokens);
 
         vm.prank(Admin.addr);
-        saleAsset.approve(address(publicSale), soldTokens);
+        vestingAsset.approve(address(publicSale), soldTokens);
 
-        assertEq(saleAsset.balanceOf(address(vestingManager)), 0);
+        assertEq(vestingAsset.balanceOf(address(vestingManager)), 0);
 
         vm.prank(User1.addr);
         publicSale.claimAndStartVesting();
 
-        assertEq(saleAsset.balanceOf(address(vestingManager)), soldTokens);
+        assertEq(vestingAsset.balanceOf(address(vestingManager)), soldTokens);
     }
 
     function compute_token_amount(uint256 usdcAmount, uint256 priceE18) internal pure returns (uint256) {

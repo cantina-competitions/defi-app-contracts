@@ -8,7 +8,6 @@ import {
     Reward
 } from "./dependencies/MultiFeeDistribution/MFDDataTypes.sol";
 import {DefiAppHomeCenter} from "./DefiAppHomeCenter.sol";
-import {VolatileAMMPoolHelper} from "./periphery/VolatileAMMPoolHelper.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IGauge} from "./interfaces/aerodrome/IGauge.sol";
 
@@ -93,7 +92,7 @@ contract DefiAppStaker is MFDBase {
 
     /// Hooks
 
-    function _beforeStakeHook(uint256 _amount, address _onBehalf, uint256) internal override {
+    function _beforeStakeHook(uint256 _amount, address _onBehalf) internal override {
         DefiAppStakerStorage storage $ = _getDefiAppStakerStorage();
         require(address($.homeCenter) != address(0), DefiAppStaker_homeCenterNotSet());
         require(address($.gauge) != address(0), DefiAppStaker_gaugeNotSet());
@@ -102,7 +101,7 @@ contract DefiAppStaker is MFDBase {
         }
     }
 
-    function _afterStakeHook(uint256 _amount, address, uint256) internal override {
+    function _afterStakeHook(uint256 _amount) internal override {
         IGauge gauge = getGauge();
         // Pull any rewards from the gauge
         if (gauge.earned(address(this)) > 0) {
@@ -114,7 +113,7 @@ contract DefiAppStaker is MFDBase {
         gauge.deposit(_amount, address(this));
     }
 
-    function _beforeWithdrawExpiredLocks(uint256 _amount, address) internal override {
+    function _beforeWithdrawExpiredLocks(uint256 _amount) internal override {
         IGauge gauge = getGauge();
         // Pull any rewards from the gauge
         if (gauge.earned(address(this)) > 0) {
